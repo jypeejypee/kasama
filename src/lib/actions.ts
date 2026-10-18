@@ -2,7 +2,7 @@ import { addIdeas, getTasks, newId, remember, saveTasks, updateTask } from './st
 import { rescheduleAll } from './notifications';
 import { setAlarms } from './alarm';
 import { endOfDay, fmtDue, fmtTime } from './time';
-import type { ChatResult, DayPlan, ProposedTask, Repeat, Task } from './types';
+import type { ChatResult, DayPlan, Idea, ProposedTask, Repeat, Task } from './types';
 
 // Every change to tasks goes through here, so reminders always match your list.
 
@@ -24,7 +24,7 @@ async function toggleSaved(t: Task) {
   let next = await updateTask(t.id, { status: done ? 'done' : 'todo', done_at: done ? new Date().toISOString() : null });
   if (t.repeat && done) {
     // A repeating task comes back: finishing this one creates the next one
-    next = [...next, { ...t, id: newId(), status: 'todo', due_at: nextDue(t.due_at, t.repeat), scheduled_start: null, scheduled_end: null, created_at: new Date().toISOString(), done_at: null, from_id: t.id }];
+    next = [...next, { ...t, id: newId(), status: 'todo', due_at: nextDue(t.due_at, t.repeat), scheduled_start: null, scheduled_end: null, created_at: new Date().toISOString(), done_at: null, from_id: t.id, steps: t.steps?.map((s) => ({ ...s, done: false })) }];
     await saveTasks(next);
   } else if (t.repeat && !done) {
     // Un-ticked by mistake: remove the next one it created
@@ -157,8 +157,11 @@ function toggleTaskIn(tasks: Task[], t: Task) {
   return next;
 }
 
-export async function makeTaskFromIdea(text: string) {
-  return addTasks([{ title: text, notes: null, due_at: null, duration_min: 30, priority: 'medium', repeat: null }]);
+// The idea's notes and steps come along, so nothing you wrote is lost
+export async function makeTaskFromIdea(idea: Idea) {
+  const tasks = await addTasks([{ title: idea.text, notes: idea.notes ?? null, due_at: null, duration_min: 30, priority: 'medium', repeat: null }]);
+  if (!idea.steps?.length) return tasks;
+  return updateTaskSafely(tasks[tasks.length - 1].id, { steps: idea.steps }); // addTasks puts the new one last
 }
 
 // Change one task and keep reminders in step with it

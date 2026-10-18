@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { Button, Chip, H, Muted } from '@/components/ui';
 import { TaskRow } from '@/components/TaskRow';
+import { DetailSheet } from '@/components/DetailSheet';
 import { FONT, useColors } from '@/lib/theme';
-import { addTasks, dropTask, toggleTask } from '@/lib/actions';
+import { addTasks, dropTask, toggleTask, updateTaskSafely } from '@/lib/actions';
 import { endOfDay } from '@/lib/time';
 import type { Repeat, Task } from '@/lib/types';
 
@@ -22,7 +23,9 @@ export function TodoList({ tasks, setTasks }: { tasks: Task[]; setTasks: (t: Tas
   const c = useColors();
   const [title, setTitle] = useState('');
   const [repeat, setRepeat] = useState<Repeat | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const open = tasks.filter((t) => t.status === 'todo');
+  const opened = tasks.find((t) => t.id === openId);
 
   async function quickAdd() {
     if (!title.trim()) return;
@@ -57,9 +60,15 @@ export function TodoList({ tasks, setTasks }: { tasks: Task[]; setTasks: (t: Tas
       {group(open).map(([name, list]) => list.length > 0 && (
         <View key={name}>
           <H>{name}</H>
-          {list.map((t) => <TaskRow key={t.id} task={t} onToggle={async () => setTasks(await toggleTask(t))} onDrop={async () => setTasks(await dropTask(t))} />)}
+          {list.map((t) => <TaskRow key={t.id} task={t} onOpen={() => setOpenId(t.id)} onToggle={async () => setTasks(await toggleTask(t))} onDrop={async () => setTasks(await dropTask(t))} />)}
         </View>
       ))}
+      <DetailSheet
+        kind="task"
+        item={opened ? { title: opened.title, notes: opened.notes, steps: opened.steps ?? [] } : null}
+        onClose={() => setOpenId(null)}
+        onSave={async (d) => { if (opened) setTasks(await updateTaskSafely(opened.id, d)); }}
+      />
     </View>
   );
 }

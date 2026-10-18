@@ -51,13 +51,16 @@ export type Task = {
   done_at: string | null;
   repeat?: Repeat | null; // finishing it creates the next one
   from_id?: string | null; // the repeating task this one came from
+  steps?: Step[]; // small steps you wrote in the task's sheet; they stay on the phone
 };
+
+export type Step = { id: string; text: string; done: boolean };
 
 export type Note = { id: string; raw: string; summary: string; ideas: string[]; created_at: string };
 
 export type ProposedTask = Pick<Task, 'title' | 'notes' | 'due_at' | 'duration_min' | 'priority' | 'repeat'>;
 
-export type Idea = { id: string; text: string; source: 'dump' | 'chat' | 'manual'; created_at: string };
+export type Idea = { id: string; text: string; source: 'dump' | 'chat' | 'manual'; created_at: string; notes?: string | null; steps?: Step[] };
 
 export type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; changes?: string[]; created_at: string };
 

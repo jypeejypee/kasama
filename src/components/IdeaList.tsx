@@ -8,6 +8,7 @@ import { FONT, useColors } from '@/lib/theme';
 import { addIdeas, getIdeas, saveIdeas } from '@/lib/storage';
 import { makeTaskFromIdea } from '@/lib/actions';
 import type { Idea, Task } from '@/lib/types';
+import { DetailSheet, detailHint } from './DetailSheet';
 
 const FROM = { dump: 'from a brain dump', chat: 'from talking', manual: 'written by you' } as const;
 const SHELLS = ['#efd9c6', '#d9e6ea', '#e3ead9', '#ece2ef'];
@@ -32,6 +33,8 @@ export function IdeaList({ onTasks }: { onTasks: (t: Task[]) => void }) {
   const [msg, setMsg] = useState('');
   const [later, setLater] = useState<string | null>(null);
   const [now, setNow] = useState(0);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const opened = ideas.find((i) => i.id === openId);
 
   useFocusEffect(useCallback(() => { getIdeas().then(setIdeas); setMsg(''); setNow(Date.now()); }, []));
 
@@ -48,7 +51,7 @@ export function IdeaList({ onTasks }: { onTasks: (t: Task[]) => void }) {
   }
 
   async function toTask(idea: Idea) {
-    onTasks(await makeTaskFromIdea(idea.text));
+    onTasks(await makeTaskFromIdea(idea));
     await remove(idea.id);
     setMsg(`"${idea.text}" is on your to-do list now. One small step.`);
   }
@@ -81,10 +84,11 @@ export function IdeaList({ onTasks }: { onTasks: (t: Task[]) => void }) {
       {shown.map((i, k) => (
         <View key={i.id} style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', paddingVertical: 6 }}>
           <View style={{ marginTop: 2 }}><Shell color={SHELLS[k % SHELLS.length]} /></View>
-          <View style={{ flex: 1, gap: 2 }}>
+          {/* Tap an idea to write more about it or break it into small steps */}
+          <Pressable accessibilityRole="button" accessibilityHint="Opens notes and steps" onPress={() => setOpenId(i.id)} style={{ flex: 1, gap: 2 }}>
             <Text style={{ color: c.text, fontFamily: FONT.title, fontSize: 16, lineHeight: 22 }}>{i.text}</Text>
-            <Muted style={{ fontSize: 14 }}>{day(i.created_at)}, {FROM[i.source]}</Muted>
-          </View>
+            <Muted style={{ fontSize: 14 }}>{[`${day(i.created_at)}, ${FROM[i.source]}`, detailHint(i)].filter(Boolean).join(' · ')}</Muted>
+          </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={`Make it a to-do: ${i.text}`} onPress={() => toTask(i)} hitSlop={10} style={{ padding: 6 }}>
             <Ionicons name="add-circle-outline" size={22} color={c.accent} />
           </Pressable>
@@ -93,6 +97,16 @@ export function IdeaList({ onTasks }: { onTasks: (t: Task[]) => void }) {
           </Pressable>
         </View>
       ))}
+      <DetailSheet
+        kind="idea"
+        item={opened ? { title: opened.text, notes: opened.notes ?? null, steps: opened.steps ?? [] } : null}
+        onClose={() => setOpenId(null)}
+        onSave={async (d) => {
+          const next = ideas.map((x) => (x.id === openId ? { ...x, text: d.title, notes: d.notes, steps: d.steps } : x));
+          setIdeas(next);
+          await saveIdeas(next);
+        }}
+      />
     </View>
   );
 }

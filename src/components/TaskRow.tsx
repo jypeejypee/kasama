@@ -3,17 +3,18 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { FONT, useColors } from '@/lib/theme';
 import { fmtDue, fmtTime } from '@/lib/time';
 import type { Task } from '@/lib/types';
+import { detailHint } from './DetailSheet';
 
 const PEBBLE = { high: '#e2a77e', medium: '#9ec29a', low: '#b8b0a2' } as const;
 
 // One thing to do. Tap the pebble when it's done. Dates read like a person would say them.
-export function TaskRow({ task, onToggle, onDrop, showSlot }: { task: Task; onToggle: () => void; onDrop?: () => void; showSlot?: boolean }) {
+export function TaskRow({ task, onToggle, onDrop, onOpen, showSlot }: { task: Task; onToggle: () => void; onDrop?: () => void; onOpen?: () => void; showSlot?: boolean }) {
   const c = useColors();
   const done = task.status === 'done';
   const color = PEBBLE[task.priority];
   const when = showSlot && task.scheduled_start
     ? `${fmtTime(task.scheduled_start)} – ${fmtTime(task.scheduled_end)}`
-    : [task.due_at && `by ${fmtDue(task.due_at)}`, task.repeat && `every ${task.repeat === 'daily' ? 'day' : task.repeat.replace('ly', '')}`].filter(Boolean).join(' · ');
+    : [task.due_at && `by ${fmtDue(task.due_at)}`, task.repeat && `every ${task.repeat === 'daily' ? 'day' : task.repeat.replace('ly', '')}`, detailHint(task)].filter(Boolean).join(' · ');
   return (
     <View style={[styles.row, { opacity: done ? 0.55 : 1 }]}>
       <Pressable
@@ -26,10 +27,11 @@ export function TaskRow({ task, onToggle, onDrop, showSlot }: { task: Task; onTo
       >
         {done && <Ionicons name="checkmark" size={16} color="#ffffff" />}
       </Pressable>
-      <View style={{ flex: 1, gap: 2 }}>
+      {/* Tap the words to open the task: notes and small steps */}
+      <Pressable disabled={!onOpen} onPress={onOpen} accessibilityRole={onOpen ? 'button' : undefined} accessibilityHint={onOpen ? 'Opens notes and steps' : undefined} style={{ flex: 1, gap: 2, minHeight: 44, justifyContent: 'center' }}>
         <Text style={{ color: c.text, fontSize: 16, fontFamily: FONT.title, textDecorationLine: done ? 'line-through' : 'none' }}>{task.title}</Text>
         {!!when && <Text style={{ color: c.muted, fontSize: 14, fontFamily: FONT.body }}>{when}</Text>}
-      </View>
+      </Pressable>
       {onDrop && !done && (
         <Pressable accessibilityRole="button" accessibilityLabel={`Let go of ${task.title}`} onPress={onDrop} hitSlop={12} style={{ padding: 6 }}>
           <Ionicons name="close" size={18} color={c.muted} />
