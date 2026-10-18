@@ -16,7 +16,7 @@ const client = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 const MODEL = Deno.env.get('CLAUDE_MODEL') ?? 'claude-sonnet-5-5';
 const LIGHT_MODEL = Deno.env.get('CLAUDE_LIGHT_MODEL') ?? 'claude-haiku-5-5';
 // Feelings, stress or anything that may be serious always gets the careful model
-// Someone in danger always gets the careful model, whatever today's limit says
+// Someone in danger gets the careful model even past today's limit (up to CRISIS_EXTRA more)
 const CRISIS = /\b(die|mamatay|patay|suicide|kill|self.?harm|ayoko na|wala nang|di ko na kaya|hindi ko na kaya|give up|suko)\b/i;
 const HEAVY = /\b(pagod|tired|exhausted|sad|lungkot|malungkot|iyak|cry|crying|stress|stressed|anxious|anxiety|kaba|takot|scared|afraid|lonely|alone|mag-isa|depress|hopeless|worthless|overwhelm|panic|hurt|sakit|ayoko na|give up|suko|die|mamatay|patay|suicide|kill|self.?harm|wala nang|di ko na kaya|hindi ko na kaya|help me|tulong)/i;
 // Supabase gives every Edge Function these two automatically
@@ -25,6 +25,8 @@ const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUP
 const DAILY_LIMIT = Number(Deno.env.get('DAILY_LIMIT') ?? 20);
 const GLOBAL_DAILY_LIMIT = Number(Deno.env.get('GLOBAL_DAILY_LIMIT') ?? 200);
 const CAREFUL_DAILY_LIMIT = Number(Deno.env.get('CAREFUL_DAILY_LIMIT') ?? 2);
+// A crisis gets the careful model even after those, up to this many more a day (so the safety rule can't be used to get it all day)
+const CRISIS_EXTRA = 5;
 // These models can hand a declined request to a fallback model inside the same call
 const FALLBACK_MODELS = ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1'];
 
@@ -98,12 +100,12 @@ function logUsage(route: string, model: string, usage: { input_tokens: number; o
 }
 
 // Asks the database for one careful reply; false when today's are used up (or the check fails, to stay cheap)
-type Careful = () => Promise<boolean>;
+type Careful = (limit: number) => Promise<boolean>;
 
 // Structured outputs: Claude's reply is guaranteed to match the JSON schema
 async function askForJson<T>(prompt: string, schema: Record<string, unknown>, opts: { route: string; effort: Effort; settings: Settings; history?: Anthropic.Beta.BetaMessageParam[]; light?: boolean; crisis?: boolean; careful?: Careful }): Promise<T> {
   // A heavy moment uses the careful model only while this phone has careful replies left today
-  const light = opts.light || (!opts.crisis && !!opts.careful && !(await opts.careful()));
+  const light = opts.light || (!!opts.careful && !(await opts.careful(opts.crisis ? CAREFUL_DAILY_LIMIT + CRISIS_EXTRA : CAREFUL_DAILY_LIMIT)));
   const model = light ? LIGHT_MODEL : MODEL;
   const useFallback = FALLBACK_MODELS.includes(model);
   const res = await client.beta.messages.create({
@@ -266,8 +268,8 @@ Deno.serve(async (req) => {
     if (raw.length > MAX_BODY) return json({ error: 'That message is too long. Try splitting it up.' }, 413);
     const body = clean(JSON.parse(raw));
     const userId = who.user.id;
-    const careful: Careful = async () => {
-      const { data, error } = await admin.rpc('use_careful', { p_user: userId, p_limit: CAREFUL_DAILY_LIMIT });
+    const careful: Careful = async (limit) => {
+      const { data, error } = await admin.rpc('use_careful', { p_user: userId, p_limit: limit });
       if (error) console.error('careful check failed', error);
       return !error && data === true;
     };
