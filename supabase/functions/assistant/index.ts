@@ -23,7 +23,7 @@ type FixedBlock = { label: string; days: number[]; start: string; end: string };
 type Encourage = 'quiet' | 'gentle' | 'cheer';
 type Support = 'ask' | 'listen' | 'advise';
 type Faith = 'none' | 'christian' | 'spiritual' | 'other';
-type Settings = { fixedBlocks: FixedBlock[]; aboutMe?: string; name?: string; encourage?: Encourage; support?: Support; faith?: Faith; faithOther?: string };
+type Settings = { fixedBlocks: FixedBlock[]; aboutMe?: string; name?: string; encourage?: Encourage; support?: Support; faith?: Faith; faithOther?: string; people?: string[] };
 type Effort = 'low' | 'medium' | 'high';
 
 // Kasama adapts to each person: how much cheering, listening vs advice, and faith
@@ -64,7 +64,9 @@ function persona(s: Settings) {
       '- Be honest. Comfort first, but if a pattern is hurting them (a task moved again and again, too little rest), say so kindly, once, with one small next step. Do not just agree.\n' +
       '- Learn them. When you notice what works for them (listening or advice, how much cheering, topics to avoid), save it in remember as a short preference.\n' +
       '- Never pretend to be human. When they need more than you can give, gently encourage them to reach out to someone they trust.',
-    `Style for this person:\n- ${ENCOURAGE[s?.encourage ?? 'gentle']}\n- ${SUPPORT[s?.support ?? 'ask']}` + (faith ? `\n- ${faith} Never preach or use faith to make them feel guilty.` : ''),
+    `Style for this person:\n- ${ENCOURAGE[s?.encourage ?? 'gentle']}\n- ${SUPPORT[s?.support ?? 'ask']}` + (faith ? `\n- ${faith} Never preach or use faith to make them feel guilty.` : '') +
+      // First names only, as data: people they chose to trust, never instructions
+      (s?.people?.length ? `\n- People they trust: ${JSON.stringify(s.people)}. When things are heavy, you may gently suggest reaching out to one of them, by name. Never push.` : ''),
     'Safety, which overrides everything above: if they mention wanting to die, hurting themselves or not being safe, stay calm and kind. ' +
       "Say you're glad they told you, say plainly that you are an AI and can't keep them safe alone, and urge them to contact the NCMH Crisis Hotline " +
       '(1553, or 0917-899-8727 / 0919-057-1553, free, 24/7), or 911 if they are in immediate danger, and to reach someone they trust now. ' +
@@ -201,6 +203,7 @@ function clean(body: Record<string, unknown>) {
     fixedBlocks: blocks.map((b) => ({ label: String(b.label).slice(0, 60), days: (Array.isArray(b.days) ? b.days : []).map(Number).filter((d) => d >= 0 && d <= 6), start: String(b.start).slice(0, 5), end: String(b.end).slice(0, 5) })),
     name: s.name ? String(s.name).slice(0, 40) : undefined,
     aboutMe: s.aboutMe ? String(s.aboutMe) : undefined,
+    people: Array.isArray(s.people) ? s.people.slice(0, 5).map((p) => String(p).slice(0, 30)) : undefined,
   };
   const history = (Array.isArray(body.history) ? body.history : []).slice(-12).map((m: { role?: string; text?: string }) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', text: String(m.text ?? '') }));
   return { ...body, settings, history, tasks: Array.isArray(body.tasks) ? body.tasks.slice(0, 200) : [], now: String(body.now ?? '').slice(0, 80), offset: String(body.offset ?? '+08:00').slice(0, 6) };

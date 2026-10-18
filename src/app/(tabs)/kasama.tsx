@@ -5,6 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chip, DemoBadge, Muted, Say, Title } from '@/components/ui';
 import { Scene, TINTS, Vessel } from '@/components/Scene';
+import { Drift } from '@/components/Motion';
 import { FONT, useColors } from '@/lib/theme';
 import { useData } from '@/lib/useData';
 import { chat, sortThoughts } from '@/lib/api';
@@ -133,7 +134,7 @@ export default function KasamaScreen() {
         </View>
         {caught.length > 0 && (
           <View style={styles.fleet}>
-            {caught.slice(-3).map((t, i) => <Vessel key={`${t}-${i}`} label={t.length > 14 ? `${t.slice(0, 13)}…` : t} tint={TINTS[i % TINTS.length]} />)}
+            {caught.slice(-3).map((t, i) => <Drift key={`${t}-${i}`} index={i}><Vessel label={t.length > 14 ? `${t.slice(0, 13)}…` : t} tint={TINTS[i % TINTS.length]} /></Drift>)}
           </View>
         )}
       </View>

@@ -6,7 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Nunito_700Bold, Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito';
 import { NunitoSans_400Regular, NunitoSans_600SemiBold, NunitoSans_700Bold } from '@expo-google-fonts/nunito-sans';
 import { onReminderTap, rescheduleAll, setupNotifications } from '@/lib/notifications';
-import { getSettings } from '@/lib/storage';
+import { getSettings, saveSettings } from '@/lib/storage';
 import { setPlace, useColors } from '@/lib/theme';
 
 // Keep the splash up until Kasama's fonts are ready, so text never jumps
@@ -33,7 +33,10 @@ export default function RootLayout() {
   const ready = loaded || !!error;
   useEffect(() => {
     if (!ready) return;
-    getSettings().then((s) => { if (!s.welcomed) router.replace('/welcome'); });
+    getSettings().then((s) => {
+      if (!s.welcomed) router.replace('/welcome');
+      else if (!s.welcomedAt) saveSettings({ ...s, welcomedAt: new Date().toISOString() }); // for phones welcomed before this was tracked
+    });
   }, [ready]);
 
   if (!ready) return null;

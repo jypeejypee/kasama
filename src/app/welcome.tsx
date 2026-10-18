@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, Say, Title } from '@/components/ui';
 import { Logo } from '@/components/Logo';
+import { Breathe } from '@/components/Motion';
 import { Scene } from '@/components/Scene';
 import { FONT, setPlace, useColors } from '@/lib/theme';
 import { getSettings, saveSettings } from '@/lib/storage';
@@ -29,7 +30,7 @@ export default function Welcome() {
 
   async function start() {
     const s = await getSettings();
-    await saveSettings({ ...s, name: name.trim() || s.name, place, welcomed: true });
+    await saveSettings({ ...s, name: name.trim() || s.name, place, welcomed: true, welcomedAt: s.welcomedAt ?? new Date().toISOString() });
     router.replace('/');
   }
 
@@ -39,7 +40,7 @@ export default function Welcome() {
         <View>
           <Scene height={230 + insets.top} />
           <View style={[styles.logo, { top: insets.top + 40 }]}>
-            <Logo width={150} />
+            <Breathe><Logo width={150} /></Breathe>
           </View>
         </View>
         <View style={styles.body}>

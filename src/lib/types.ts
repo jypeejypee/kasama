@@ -5,6 +5,8 @@ export type Encourage = 'quiet' | 'gentle' | 'cheer';
 export type Support = 'ask' | 'listen' | 'advise';
 export type Faith = 'none' | 'christian' | 'spiritual' | 'other';
 export type Place = 'dagat' | 'bundok' | 'palayan';
+// Someone you trust. Kasama only opens your own SMS or Messenger; it never messages them itself.
+export type Person = { id: string; name: string; how: 'sms' | 'messenger'; handle: string };
 // quiet: morning and night only · calm: plus task starts and deadlines at risk · all: every reminder
 export type Reminders = 'quiet' | 'calm' | 'all';
 
@@ -15,6 +17,11 @@ export type Settings = {
   reminders?: Reminders; // default 'calm'
   place?: Place; // the calm place Kasama lives in, default 'dagat'
   welcomed?: boolean; // set after the first-open Welcome
+  welcomedAt?: string; // ISO; "your people" is offered only after a week
+  calendarIds?: string[]; // phone calendars Kasama may check for busy times
+  people?: Person[]; // people you trust; Kasama nudges you to say hi
+  peopleAsked?: boolean; // the gentle "is there someone you trust?" question was answered
+  nudgedAt?: string; // ISO; last time Kasama suggested saying hi
   aboutMe?: string; // what Kasama remembers about you, sent with every request
   name?: string;
   encourage?: Encourage;

@@ -22,7 +22,11 @@
       "permissions": [
         "SCHEDULE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
-        "com.android.alarm.permission.SET_ALARM"
+        "com.android.alarm.permission.SET_ALARM",
+        "android.permission.READ_CALENDAR"
+      ],
+      "blockedPermissions": [
+        "android.permission.WRITE_CALENDAR"
       ]
     },
     "web": {
@@ -50,7 +54,14 @@
           "backgroundColor": "#f6f0e4"
         }
       ],
-      "expo-speech-recognition"
+      "expo-speech-recognition",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Kasama checks when you are busy so it can plan around your meetings. Event names stay on your phone.",
+          "remindersPermission": false
+        }
+      ]
     ],
     "extra": {
       "router": {},

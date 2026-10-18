@@ -12,6 +12,8 @@ import { endOfDay, fmtDue, fmtTime, isToday, parseHHMM } from '@/lib/time';
 import { planDay } from '@/lib/api';
 import { applyPlan, describeMoves, dropTask, isMissed, moveToTomorrow, toggleTask } from '@/lib/actions';
 import { toggleListening } from '@/lib/voice';
+import { nudgeFor, sayHi } from '@/lib/people';
+import { getSettings, saveSettings } from '@/lib/storage';
 import type { Task } from '@/lib/types';
 
 const rank = { high: 0, medium: 1, low: 2 } as const;
@@ -33,6 +35,7 @@ export default function Home() {
   const [message, setMessage] = useState('');
   const [moves, setMoves] = useState<string[]>([]);
   const [showDay, setShowDay] = useState(false);
+  const [nudgeDone, setNudgeDone] = useState(false);
 
   const now = new Date();
   const mode = modeFor(now, settings.eveningReview || '21:30');
@@ -50,6 +53,8 @@ export default function Home() {
   const soon = open.find((t) => t.due_at && new Date(t.due_at) > endOfDay() && new Date(t.due_at).getTime() - now.getTime() < 2 * 24 * 60 * 60 * 1000);
   const next = planned.find((t) => new Date(t.scheduled_start ?? 0) >= now) ?? path[0];
   const name = settings.name?.trim();
+  const friend = nudgeFor(settings, now.getTime());
+  const nudged = async () => { setNudgeDone(true); await saveSettings({ ...(await getSettings()), nudgedAt: new Date().toISOString() }); };
 
   async function plan() {
     if (open.length === 0) return setMessage('Nothing to plan yet. Tell me what is on your mind first.');
@@ -126,6 +131,13 @@ export default function Home() {
           </Text>
         )}
         {soon && <Muted style={{ marginTop: 6 }}>Heads up: {soon.title} is due {fmtDue(soon.due_at)}.</Muted>}
+        {friend && !nudgeDone && (
+          <View style={[styles.soft, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+            <Say style={{ flex: 1, fontSize: 16 }}>You haven&apos;t said hi to {friend.name} in a while. Want to?</Say>
+            <Button title="Say hi" variant="link" onPress={async () => { await sayHi(friend); await nudged(); }} />
+            <Button title="Later" variant="link" onPress={nudged} />
+          </View>
+        )}
 
         {doneToday.length > 0 && <H>Done today</H>}
         {doneToday.map((t) => <TaskRow key={t.id} task={t} onToggle={() => toggle(t)} />)}

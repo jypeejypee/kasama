@@ -1,6 +1,7 @@
 import { describeNow } from './time';
 import { mockChat, mockDump, mockPlan } from './mock';
 import { accessToken, forgetSession } from './session';
+import { busyAsBlocks, busyToday } from './calendar';
 import type { ChatMessage, ChatResult, DayPlan, DumpResult, Settings, Task } from './types';
 
 // The Claude API key never goes inside the app (anyone could pull it out of the APK).
@@ -33,16 +34,22 @@ async function call<T>(action: 'dump' | 'plan' | 'chat', payload: Record<string,
   return body as T;
 }
 
-export const sortThoughts = (raw: string, settings: Settings) => (DEMO ? mockDump(raw, settings) : call<DumpResult>('dump', { raw, settings }));
+// Only what Claude needs leaves the phone: first names of your people (never their numbers), no calendar ids
+const forCloud = ({ people, calendarIds: _ids, ...s }: Settings) => ({ ...s, people: (people ?? []).map((p) => p.name) });
 
-export function planDay(tasks: Task[], settings: Settings) {
-  if (DEMO) return mockPlan(tasks, settings);
-  return call<DayPlan>('plan', { tasks: openTasks(tasks), settings });
+export const sortThoughts = (raw: string, settings: Settings) => (DEMO ? mockDump(raw, settings) : call<DumpResult>('dump', { raw, settings: forCloud(settings) }));
+
+// Your calendar's busy times join your fixed schedule for today, so tasks never land on a meeting
+export async function planDay(tasks: Task[], settings: Settings) {
+  const busy = busyAsBlocks(await busyToday(settings.calendarIds ?? []));
+  const withBusy = { ...settings, fixedBlocks: [...settings.fixedBlocks, ...busy] };
+  if (DEMO) return mockPlan(tasks, withBusy);
+  return call<DayPlan>('plan', { tasks: openTasks(tasks), settings: forCloud(withBusy) });
 }
 
 const openTasks = (tasks: Task[]) => tasks.filter((t) => t.status === 'todo').map((t) => ({ id: t.id, title: t.title, due_at: t.due_at, minutes: t.duration_min, priority: t.priority, repeat: t.repeat ?? null, planned: t.scheduled_start }));
 
 export function chat(message: string, history: ChatMessage[], tasks: Task[], settings: Settings) {
   if (DEMO) return mockChat(message, tasks);
-  return call<ChatResult>('chat', { message, history: history.slice(-12).map((m) => ({ role: m.role, text: m.text })), tasks: openTasks(tasks), settings });
+  return call<ChatResult>('chat', { message, history: history.slice(-12).map((m) => ({ role: m.role, text: m.text })), tasks: openTasks(tasks), settings: forCloud(settings) });
 }

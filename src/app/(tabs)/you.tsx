@@ -9,7 +9,9 @@ import { DEFAULT_SETTINGS, getSettings, getTasks, newId, saveSettings, saveTasks
 import { rescheduleAll, sendTestNotification, setupNotifications } from '@/lib/notifications';
 import { validHHMM } from '@/lib/time';
 import { DEMO } from '@/lib/api';
-import type { Encourage, Faith, FixedBlock, Place, Reminders, Settings, Support } from '@/lib/types';
+import type { Encourage, Faith, FixedBlock, Person, Place, Reminders, Settings, Support } from '@/lib/types';
+import { connectCalendars, type PhoneCalendar } from '@/lib/calendar';
+import { sayHi } from '@/lib/people';
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const PLACES: [Place, string, string][] = [
@@ -31,8 +33,44 @@ export default function You() {
   const insets = useSafeAreaInsets();
   const [s, setS] = useState<Settings>(DEFAULT_SETTINGS);
   const [msg, setMsg] = useState('');
+  const [who, setWho] = useState({ name: '', how: 'sms' as Person['how'], handle: '' });
+  const [cals, setCals] = useState<PhoneCalendar[] | null>(null);
+  const [calMsg, setCalMsg] = useState('');
   // Load the saved settings each time you open this screen (chat may have added to About me)
-  useFocusEffect(useCallback(() => { getSettings().then(setS); }, []));
+  useFocusEffect(useCallback(() => {
+    getSettings().then((saved) => {
+      setS(saved);
+      // Already connected: show the calendar list again (no new permission prompt)
+      if (saved.calendarIds?.length) connectCalendars().then((r) => { if (Array.isArray(r)) setCals(r); });
+    });
+  }, []));
+
+  // People and calendar save right away, like your place
+  async function persist(patch: Partial<Settings>) {
+    setS((prev) => ({ ...prev, ...patch }));
+    await saveSettings({ ...(await getSettings()), ...patch });
+  }
+
+  async function addPerson() {
+    if (!who.name.trim() || !who.handle.trim()) return;
+    await persist({ people: [...(s.people ?? []), { id: newId(), name: who.name.trim(), how: who.how, handle: who.handle.trim() }], peopleAsked: true });
+    setWho({ name: '', how: who.how, handle: '' });
+  }
+
+  async function connect() {
+    const r = await connectCalendars();
+    if (r === 'denied') return setCalMsg('No problem. If you change your mind, allow Calendar for Kasama in your phone settings.');
+    if (r === 'unavailable') return setCalMsg('The calendar works in the installed app, not in Expo Go.');
+    setCals(r);
+    setCalMsg('');
+    // Start with every calendar except holidays and birthdays, which never block your time
+    if (!s.calendarIds?.length) await persist({ calendarIds: r.filter((x) => !/holiday|birthday|pista/i.test(x.title)).map((x) => x.id) });
+  }
+
+  const toggleCal = (id: string) => {
+    const ids = s.calendarIds ?? [];
+    persist({ calendarIds: ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id] });
+  };
 
   const field = { color: c.text, backgroundColor: '#ffffff', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, fontFamily: FONT.body } as const;
   const setBlock = (id: string, patch: Partial<FixedBlock>) => setS({ ...s, fixedBlocks: s.fixedBlocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) });
@@ -145,6 +183,58 @@ export default function You() {
       <View style={{ height: 6 }} />
       <Button title="Save" onPress={save} />
       {!!msg && <Text style={{ color: c.accent, fontFamily: FONT.strong, fontSize: 15, textAlign: 'center' }}>{msg}</Text>}
+
+      <H>Your people</H>
+      <Muted>Someone you trust. Now and then I&apos;ll remind you to say hi. I only open your own messaging app; I never message anyone myself.</Muted>
+      {(s.people ?? []).map((p) => (
+        <View key={p.id} style={styles.block}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: c.text, fontFamily: FONT.title, fontSize: 16 }}>{p.name}</Text>
+              <Muted style={{ fontSize: 14 }}>{p.how === 'sms' ? 'Text' : 'Messenger'} · {p.handle}</Muted>
+            </View>
+            <Button title="Say hi" variant="link" onPress={() => sayHi(p)} />
+            <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${p.name}`} onPress={() => persist({ people: (s.people ?? []).filter((x) => x.id !== p.id) })} hitSlop={10} style={{ padding: 6 }}>
+              <Ionicons name="close" size={20} color={c.muted} />
+            </Pressable>
+          </View>
+        </View>
+      ))}
+      {(s.people ?? []).length < 5 && (
+        <View style={styles.block}>
+          <TextInput accessibilityLabel="Their name" value={who.name} onChangeText={(v) => setWho({ ...who, name: v })} placeholder="Their name, like Mama or Mia" placeholderTextColor="#8a9590" style={[field, { backgroundColor: c.sky }]} />
+          <View style={styles.wrap}>
+            <Chip label="Text message" active={who.how === 'sms'} onPress={() => setWho({ ...who, how: 'sms' })} />
+            <Chip label="Messenger" active={who.how === 'messenger'} onPress={() => setWho({ ...who, how: 'messenger' })} />
+          </View>
+          <TextInput
+            accessibilityLabel={who.how === 'sms' ? 'Their phone number' : 'Their Messenger username'}
+            value={who.handle}
+            onChangeText={(v) => setWho({ ...who, handle: v })}
+            placeholder={who.how === 'sms' ? '0917 123 4567' : 'Messenger username (from m.me/…)'}
+            placeholderTextColor="#8a9590"
+            keyboardType={who.how === 'sms' ? 'phone-pad' : 'default'}
+            autoCapitalize="none"
+            style={[field, { backgroundColor: c.sky }]}
+          />
+          <Button title="Add" variant="secondary" onPress={addPerson} disabled={!who.name.trim() || !who.handle.trim()} />
+        </View>
+      )}
+      <Muted style={{ fontSize: 13 }}>Their numbers stay on this phone. Only first names reach me, so I can say &quot;maybe message Mia?&quot;</Muted>
+
+      <H>Your calendar</H>
+      <Muted>I can see when you&apos;re busy, not what you&apos;re doing. Event names never leave your phone. Plan my day then works around your meetings.</Muted>
+      {cals ? (
+        <>
+          <View style={styles.wrap}>
+            {cals.map((cal) => <Chip key={cal.id} label={cal.title} active={(s.calendarIds ?? []).includes(cal.id)} onPress={() => toggleCal(cal.id)} />)}
+          </View>
+          <Button title="Disconnect my calendar" variant="link" onPress={() => { setCals(null); persist({ calendarIds: [] }); }} />
+        </>
+      ) : (
+        <Button title="Connect my calendar" variant="secondary" onPress={connect} />
+      )}
+      {!!calMsg && <Muted>{calMsg}</Muted>}
 
       <H>Behind the scenes</H>
       <DemoBadge />

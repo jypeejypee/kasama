@@ -7,7 +7,8 @@ import { Scene } from '@/components/Scene';
 import { FONT, useColors } from '@/lib/theme';
 import { useData } from '@/lib/useData';
 import { dropTask, updateTaskSafely } from '@/lib/actions';
-import { getIdeas, getMoods } from '@/lib/storage';
+import { getIdeas, getMoods, getSettings, saveSettings } from '@/lib/storage';
+import { shouldInvite } from '@/lib/people';
 import { dayKey } from '@/lib/time';
 import type { Mood, Task } from '@/lib/types';
 
@@ -18,7 +19,8 @@ const MOOD = { Masaya: '#9ec29a', 'Okay lang': '#e8c9a0', Pagod: '#b8a6cc' } as 
 export default function Journey() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const { tasks, settings, setTasks } = useData();
+  const { tasks, settings, setTasks, reload } = useData();
+  const [kindReply, setKindReply] = useState(false);
   const [moods, setMoods] = useState<Mood[]>([]);
   const [ideaCount, setIdeaCount] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -70,6 +72,17 @@ export default function Journey() {
           <Say>{letter}</Say>
           {!!pattern && <Say style={{ color: c.muted }}>{pattern}</Say>}
         </View>
+
+        {shouldInvite(settings, now) && (
+          <View style={[styles.letter, { backgroundColor: c.band }]}>
+            <Say>Can I ask you something? Is there someone you trust, a friend, family, anyone, that you&apos;d like me to remind you to check in with sometimes?</Say>
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+              <Pressable accessibilityRole="button" onPress={() => router.navigate('/you')} style={[styles.small, { backgroundColor: c.accent }]}><Text style={{ color: '#ffffff', fontFamily: FONT.bold }}>Add someone</Text></Pressable>
+              <Pressable accessibilityRole="button" onPress={async () => { await saveSettings({ ...(await getSettings()), peopleAsked: true }); setKindReply(true); reload(); }} style={styles.small}><Text style={{ color: c.text, fontFamily: FONT.bold }}>No one right now</Text></Pressable>
+            </View>
+          </View>
+        )}
+        {kindReply && <Say style={{ color: c.muted }}>That&apos;s okay. I&apos;m here. And if you ever want someone to talk to, I can help you find people who listen.</Say>}
 
         <H>How your week felt</H>
         <View style={styles.moods}>
