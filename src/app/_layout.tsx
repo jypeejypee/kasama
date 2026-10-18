@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,6 +8,7 @@ import { NunitoSans_400Regular, NunitoSans_600SemiBold, NunitoSans_700Bold } fro
 import { onReminderTap, rescheduleAll, setupNotifications } from '@/lib/notifications';
 import { getSettings, saveSettings } from '@/lib/storage';
 import { setPlace, useColors } from '@/lib/theme';
+import { prefetchUpdate, updateIfAvailable } from '@/lib/updates';
 
 // Keep the splash up until Kasama's fonts are ready, so text never jumps
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -15,22 +16,25 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 export default function RootLayout() {
   const c = useColors();
   const [loaded, error] = useFonts({ Nunito_700Bold, Nunito_800ExtraBold, NunitoSans_400Regular, NunitoSans_600SemiBold, NunitoSans_700Bold });
+  // Check for a new version while the splash is up (a few seconds at most), so updates apply on this open
+  const [checked, setChecked] = useState(false);
+  useEffect(() => { updateIfAvailable().finally(() => setChecked(true)); }, []);
 
   useEffect(() => {
-    if (loaded || error) SplashScreen.hideAsync().catch(() => {});
-  }, [loaded, error]);
+    if ((loaded || error) && checked) SplashScreen.hideAsync().catch(() => {});
+  }, [loaded, error, checked]);
 
   useEffect(() => {
     getSettings().then((s) => setPlace(s.place));
     // Ask for permission once, then refresh reminders every time the app comes to the front
     setupNotifications().then((ok) => (ok ? rescheduleAll() : undefined));
-    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') rescheduleAll(); });
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') { rescheduleAll(); prefetchUpdate(); } });
     const stopTaps = onReminderTap((url) => router.push(url as never));
     return () => { sub.remove(); stopTaps(); };
   }, []);
 
   // First open: say hi before anything else (after the screens are ready to navigate)
-  const ready = loaded || !!error;
+  const ready = (loaded || !!error) && checked;
   useEffect(() => {
     if (!ready) return;
     getSettings().then((s) => {
