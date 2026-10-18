@@ -9,7 +9,6 @@ import { getSettings, saveSettings } from '@/lib/storage';
 import { fmtTime } from '@/lib/time';
 import type { Settings, Task } from '@/lib/types';
 
-const DAY = 24 * 60 * 60 * 1000;
 const PEBBLE = { high: '#e2a77e', medium: '#9ec29a', low: '#b8b0a2' } as const;
 const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const sameDay = (iso: string | null, d: Date) => !!iso && midnight(new Date(iso)).getTime() === d.getTime();
@@ -32,7 +31,8 @@ export function CalendarView({ tasks, setTasks, settings }: { tasks: Task[]; set
   const c = useColors();
   const today = midnight(new Date());
   const [day, setDay] = useState(today);
-  const [week, setWeek] = useState(0);
+  const [week, setWeek] = useState(0); // weeks (or months, in month view) away from now
+  const [mode, setMode] = useState<'week' | 'month'>('week');
   const [events, setEvents] = useState<PhoneEvent[]>([]);
   const [connected, setConnected] = useState<string[] | null>(null); // set right after connecting here
   const ids = connected ?? settings.calendarIds ?? [];
@@ -46,10 +46,18 @@ export function CalendarView({ tasks, setTasks, settings }: { tasks: Task[]; set
     return () => { live = false; };
   }, [idKey, day]);
 
-  // The week (Monday first) that contains today, moved by ‹ ›
-  const monday = new Date(today.getTime() - ((today.getDay() + 6) % 7) * DAY + week * 7 * DAY);
-  const days = Array.from({ length: 7 }, (_, i) => new Date(monday.getTime() + i * DAY));
+  // Week (Sunday first) or the whole month, moved by ‹ ›
+  const plus = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  const sunday = plus(today, -today.getDay() + week * 7);
+  const first = new Date(today.getFullYear(), today.getMonth() + week, 1); // in month view, "week" counts months
+  const gridStart = plus(first, -first.getDay());
+  const lastOfMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+  const weeksShown = Math.ceil((first.getDay() + lastOfMonth.getDate()) / 7);
+  const days = mode === 'week'
+    ? Array.from({ length: 7 }, (_, i) => plus(sunday, i))
+    : Array.from({ length: weeksShown * 7 }, (_, i) => plus(gridStart, i));
   const busy = (d: Date) => tasks.some((t) => t.status === 'todo' && (sameDay(t.scheduled_start, d) || sameDay(t.due_at, d)));
+  const switchMode = (m: 'week' | 'month') => { setMode(m); setWeek(0); };
 
   const rows: Row[] = [
     ...settings.fixedBlocks.filter((b) => b.days.includes(day.getDay())).map((b) => ({
@@ -93,25 +101,45 @@ export function CalendarView({ tasks, setTasks, settings }: { tasks: Task[]; set
 
   return (
     <View style={{ gap: 12 }}>
-      <View style={styles.weekHead}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Previous week" onPress={() => setWeek(week - 1)} hitSlop={10} style={styles.arrow}><Ionicons name="chevron-back" size={20} color={c.text} /></Pressable>
-        <Text style={{ flex: 1, textAlign: 'center', color: c.text, fontFamily: FONT.title, fontSize: 16 }}>{monday.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Next week" onPress={() => setWeek(week + 1)} hitSlop={10} style={styles.arrow}><Ionicons name="chevron-forward" size={20} color={c.text} /></Pressable>
+      <View style={[styles.modes, { backgroundColor: 'rgba(255,255,255,0.7)' }]} accessibilityRole="tablist">
+        {(['week', 'month'] as const).map((m) => (
+          <Pressable key={m} accessibilityRole="tab" accessibilityState={{ selected: mode === m }} onPress={() => switchMode(m)} style={[styles.mode, mode === m && { backgroundColor: c.accent }]}>
+            <Text style={{ color: mode === m ? '#ffffff' : c.text, fontFamily: FONT.bold, fontSize: 14 }}>{m === 'week' ? 'Week' : 'Month'}</Text>
+          </Pressable>
+        ))}
       </View>
-      <View style={styles.week}>
+      <View style={styles.weekHead}>
+        <Pressable accessibilityRole="button" accessibilityLabel={mode === 'week' ? 'Previous week' : 'Previous month'} onPress={() => setWeek(week - 1)} hitSlop={10} style={styles.arrow}><Ionicons name="chevron-back" size={20} color={c.text} /></Pressable>
+        <Text style={{ flex: 1, textAlign: 'center', color: c.text, fontFamily: FONT.title, fontSize: 16 }}>{(mode === 'week' ? sunday : first).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={mode === 'week' ? 'Next week' : 'Next month'} onPress={() => setWeek(week + 1)} hitSlop={10} style={styles.arrow}><Ionicons name="chevron-forward" size={20} color={c.text} /></Pressable>
+      </View>
+      {mode === 'month' && (
+        <View style={styles.week}>
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((w, i) => <Text key={i} style={{ flex: 1, textAlign: 'center', color: c.muted, fontFamily: FONT.semi, fontSize: 12 }}>{w}</Text>)}
+        </View>
+      )}
+      <View style={[styles.week, mode === 'month' && { flexWrap: 'wrap', gap: 0 }]}>
         {days.map((d) => {
           const on = d.getTime() === day.getTime();
           const isToday = d.getTime() === today.getTime();
+          const outside = mode === 'month' && d.getMonth() !== first.getMonth();
           return (
-            <Pressable key={d.getTime()} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={d.toDateString()} onPress={() => setDay(d)} style={[styles.day, on && { backgroundColor: c.accent }]}>
-              <Text style={{ color: on ? '#ffffff' : c.muted, fontFamily: FONT.semi, fontSize: 12 }}>{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</Text>
-              <Text style={{ color: on ? '#ffffff' : c.text, fontFamily: FONT.title, fontSize: 17, textDecorationLine: isToday && !on ? 'underline' : 'none' }}>{d.getDate()}</Text>
+            <Pressable
+              key={d.getTime()}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              accessibilityLabel={d.toDateString()}
+              onPress={() => setDay(d)}
+              style={[mode === 'week' ? styles.day : styles.cell, on && { backgroundColor: c.accent }, outside && { opacity: 0.35 }]}
+            >
+              {mode === 'week' && <Text style={{ color: on ? '#ffffff' : c.muted, fontFamily: FONT.semi, fontSize: 12 }}>{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</Text>}
+              <Text style={{ color: on ? '#ffffff' : c.text, fontFamily: FONT.title, fontSize: mode === 'week' ? 17 : 15, textDecorationLine: isToday && !on ? 'underline' : 'none' }}>{d.getDate()}</Text>
               <View style={[styles.dot, { backgroundColor: busy(d) ? (on ? '#ffffff' : c.accent) : 'transparent' }]} />
             </Pressable>
           );
         })}
       </View>
-      {week !== 0 && <Button title="Back to today" variant="link" onPress={() => { setWeek(0); setDay(today); }} />}
+      {(week !== 0 || day.getTime() !== today.getTime()) && <Button title="Back to today" variant="link" onPress={() => { setWeek(0); setDay(today); }} />}
 
       <Text style={{ color: c.text, fontFamily: FONT.title, fontSize: 18, marginTop: 4 }}>{label}</Text>
       {rows.length === 0 && <Muted>Nothing on this day yet.</Muted>}
@@ -154,6 +182,9 @@ export function CalendarView({ tasks, setTasks, settings }: { tasks: Task[]; set
 }
 
 const styles = StyleSheet.create({
+  modes: { flexDirection: 'row', alignSelf: 'center', padding: 4, borderRadius: 22 },
+  mode: { minHeight: 40, paddingHorizontal: 22, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
+  cell: { width: `${100 / 7}%`, alignItems: 'center', paddingVertical: 8, gap: 2, borderRadius: 14 },
   weekHead: { flexDirection: 'row', alignItems: 'center' },
   arrow: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.75)' },
   week: { flexDirection: 'row', justifyContent: 'space-between', gap: 4 },

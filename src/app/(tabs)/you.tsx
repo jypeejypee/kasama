@@ -14,6 +14,7 @@ import type { Encourage, Faith, FixedBlock, Person, Place, Reminders, Settings, 
 import { connectCalendars, type PhoneCalendar } from '@/lib/calendar';
 import { sayHi } from '@/lib/people';
 import { voiceReport } from '@/lib/voice';
+import { TimeField } from '@/components/TimePicker';
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const PLACES: [Place, string, string][] = [
@@ -172,11 +173,11 @@ export default function You() {
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <View style={{ flex: 1, gap: 4 }}>
           <Muted style={{ fontSize: 14 }}>Morning hello</Muted>
-          <TextInput accessibilityLabel="Morning notification time" value={s.morningDigest} onChangeText={(v) => setS({ ...s, morningDigest: v })} style={field} placeholder="07:00" placeholderTextColor="#8a9590" />
+          <TimeField label="Morning hello" value={s.morningDigest} onChange={(v) => setS({ ...s, morningDigest: v })} />
         </View>
         <View style={{ flex: 1, gap: 4 }}>
           <Muted style={{ fontSize: 14 }}>Evening check-in</Muted>
-          <TextInput accessibilityLabel="Evening notification time" value={s.eveningReview} onChangeText={(v) => setS({ ...s, eveningReview: v })} style={field} placeholder="21:30" placeholderTextColor="#8a9590" />
+          <TimeField label="Evening check-in" value={s.eveningReview} onChange={(v) => setS({ ...s, eveningReview: v })} />
         </View>
       </View>
       <Button title="Send a test notification" variant="link" onPress={test} />
@@ -186,7 +187,7 @@ export default function You() {
       <TextInput accessibilityLabel="About me" value={s.aboutMe ?? ''} onChangeText={(v) => setS({ ...s, aboutMe: v })} multiline placeholder={"- No tasks after 10pm\n- I focus best in the morning\n- Mama's birthday is March 3"} placeholderTextColor="#8a9590" style={[field, { minHeight: 120, textAlignVertical: 'top' }]} />
 
       <H>Your fixed schedule</H>
-      <Muted>Work, class and sleep. I never plan things on top of these. Use 24-hour times.</Muted>
+      <Muted>Work, class and sleep. I never plan things on top of these. Tap a time to change it.</Muted>
       {s.fixedBlocks.map((b) => (
         <View key={b.id} style={styles.block}>
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
@@ -199,9 +200,9 @@ export default function You() {
             {DAYS.map((d, i) => <Chip key={i} label={d} active={b.days.includes(i)} onPress={() => setBlock(b.id, { days: b.days.includes(i) ? b.days.filter((x) => x !== i) : [...b.days, i].sort() })} />)}
           </View>
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-            <TextInput accessibilityLabel="Start time" value={b.start} onChangeText={(v) => setBlock(b.id, { start: v })} style={[field, { flex: 1, backgroundColor: c.sky }]} />
+            <View style={{ flex: 1 }}><TimeField label={`${b.label} starts`} value={b.start} onChange={(v) => setBlock(b.id, { start: v })} /></View>
             <Text style={{ color: c.muted, fontFamily: FONT.body }}>to</Text>
-            <TextInput accessibilityLabel="End time" value={b.end} onChangeText={(v) => setBlock(b.id, { end: v })} style={[field, { flex: 1, backgroundColor: c.sky }]} />
+            <View style={{ flex: 1 }}><TimeField label={`${b.label} ends`} value={b.end} onChange={(v) => setBlock(b.id, { end: v })} /></View>
           </View>
         </View>
       ))}
