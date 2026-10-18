@@ -7,6 +7,8 @@ import { endOfDay, fmtDue, fmtTime, isToday } from '@/lib/time';
 import { dropTask, moveToTomorrow, toggleTask } from '@/lib/actions';
 import { rememberLatest, saveMood } from '@/lib/storage';
 import type { Mood, Settings, Task } from '@/lib/types';
+import { sleepBlock } from '@/lib/sleep';
+import { prettyTime } from './TimePicker';
 
 const FEELINGS: [Mood['feeling'], string][] = [
   ['Masaya', 'Love that. Hold onto this feeling tonight.'],
@@ -15,7 +17,7 @@ const FEELINGS: [Mood['feeling'], string][] = [
 ];
 
 // At night, Home becomes this: quiet sky, kind words, and closing the day together
-export function CheckIn({ tasks, settings, setTasks, onSeeDay }: { tasks: Task[]; settings: Settings; setTasks: (t: Task[]) => void; onSeeDay: () => void }) {
+export function CheckIn({ tasks, settings, setTasks, onSeeDay, bedtime }: { tasks: Task[]; settings: Settings; setTasks: (t: Task[]) => void; onSeeDay: () => void; bedtime?: boolean }) {
   const insets = useSafeAreaInsets();
   const [handled, setHandled] = useState<Record<string, string>>({}); // task id -> what you chose
   const [feeling, setFeeling] = useState<number | null>(null);
@@ -52,6 +54,11 @@ export function CheckIn({ tasks, settings, setTasks, onSeeDay }: { tasks: Task[]
       </Svg>
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 100, paddingHorizontal: 28, paddingBottom: 140, gap: 14 }}>
         <Text accessibilityRole="header" style={styles.title}>Hey{name ? ` ${name}` : ''}. You made it through today.</Text>
+        {bedtime && (
+          <Text style={[styles.say, { color: NIGHT.moon, fontFamily: FONT.strong }]}>
+            It&apos;s past your bedtime ({prettyTime(sleepBlock(settings)?.start ?? '23:30')}). Close the day in a minute, then rest. Everything else can wait, and I&apos;ll remember it for you.
+          </Text>
+        )}
         <Text style={styles.say}>{praise}</Text>
         {left.length > 0 && <Text style={styles.say}>A few things are still open. For each one, what should we do?</Text>}
 

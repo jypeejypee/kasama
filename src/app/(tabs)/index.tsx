@@ -16,6 +16,7 @@ import { toggleListening } from '@/lib/voice';
 import { nudgeFor, sayHi } from '@/lib/people';
 import { getSettings, saveSettings } from '@/lib/storage';
 import type { Task } from '@/lib/types';
+import { asleepAt } from '@/lib/sleep';
 
 const rank = { high: 0, medium: 1, low: 2 } as const;
 // The open tasks, as one short key, to know whether the list changed since Kasama spoke
@@ -44,8 +45,10 @@ export default function Home() {
   const [nudgeDone, setNudgeDone] = useState(false);
 
   const now = new Date();
-  const mode = modeFor(now, settings.morningDigest || '07:00', settings.eveningReview || '21:30');
-  if (mode === 'night' && !showDay) return <CheckIn tasks={tasks} settings={settings} setTasks={setTasks} onSeeDay={() => setShowDay(true)} />;
+  // Inside your Sleep block, Home is the night screen too, whatever the check-in time says
+  const sleepy = asleepAt(settings, now);
+  const mode = sleepy ? 'night' : modeFor(now, settings.morningDigest || '07:00', settings.eveningReview || '21:30');
+  if (mode === 'night' && !showDay) return <CheckIn tasks={tasks} settings={settings} setTasks={setTasks} bedtime={sleepy} onSeeDay={() => setShowDay(true)} />;
 
   const open = tasks.filter((t) => t.status === 'todo');
   const missed = open.filter((t) => isMissed(t));
