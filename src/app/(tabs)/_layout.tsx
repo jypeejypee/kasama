@@ -52,11 +52,11 @@ function FloatingBar({ state, navigation }: BarProps) {
         }
         const meta = ICONS[r.name];
         if (!meta) return null;
-        // Where you are, at a glance: your place's color, a filled icon on a soft pebble, a bold label
-        const color = focused ? c.accent : '#646f6a';
+        // Where you are, at a glance: a clear green, filled icon and bold label. No box around it.
+        const color = focused ? '#2a7d52' : '#646f6a';
         return (
           <Pressable key={r.key} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel={meta.label} onPress={() => go(r.name, r.key, focused)} style={styles.tab}>
-            <View style={[styles.pebble, focused && { backgroundColor: c.band }]}>
+            <View style={styles.pebble}>
               <Ionicons name={focused ? meta.active : meta.icon} size={22} color={color} />
             </View>
             <Text style={{ color, fontSize: 12, fontFamily: focused ? FONT.title : FONT.semi }}>{meta.label}</Text>
