@@ -4,7 +4,8 @@
 //
 // Deploy:  npx supabase functions deploy assistant --no-verify-jwt
 // Secrets: npx supabase secrets set ANTHROPIC_API_KEY=... APP_SECRET=... CLAUDE_MODEL=...
-// Optional: DAILY_LIMIT (per phone, default 20) and GLOBAL_DAILY_LIMIT (everyone together, default 200)
+// Optional: DAILY_LIMIT (per phone, default 20), GLOBAL_DAILY_LIMIT (everyone together, default 200)
+// and CAREFUL_DAILY_LIMIT (careful-model replies per phone, default 2; after that the light model answers)
 // Needs the usage table from supabase/migrations and Anonymous Sign-Ins turned on (see README step 3).
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
@@ -15,12 +16,15 @@ const client = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 const MODEL = Deno.env.get('CLAUDE_MODEL') ?? 'claude-sonnet-5-5';
 const LIGHT_MODEL = Deno.env.get('CLAUDE_LIGHT_MODEL') ?? 'claude-haiku-5-5';
 // Feelings, stress or anything that may be serious always gets the careful model
+// Someone in danger always gets the careful model, whatever today's limit says
+const CRISIS = /\b(die|mamatay|patay|suicide|kill|self.?harm|ayoko na|wala nang|di ko na kaya|hindi ko na kaya|give up|suko)\b/i;
 const HEAVY = /\b(pagod|tired|exhausted|sad|lungkot|malungkot|iyak|cry|crying|stress|stressed|anxious|anxiety|kaba|takot|scared|afraid|lonely|alone|mag-isa|depress|hopeless|worthless|overwhelm|panic|hurt|sakit|ayoko na|give up|suko|die|mamatay|patay|suicide|kill|self.?harm|wala nang|di ko na kaya|hindi ko na kaya|help me|tulong)/i;
 // Supabase gives every Edge Function these two automatically
 const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } });
 // Testing-phase limits; raise them in Supabase secrets when you're ready
 const DAILY_LIMIT = Number(Deno.env.get('DAILY_LIMIT') ?? 20);
 const GLOBAL_DAILY_LIMIT = Number(Deno.env.get('GLOBAL_DAILY_LIMIT') ?? 200);
+const CAREFUL_DAILY_LIMIT = Number(Deno.env.get('CAREFUL_DAILY_LIMIT') ?? 2);
 // These models can hand a declined request to a fallback model inside the same call
 const FALLBACK_MODELS = ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1'];
 
@@ -93,9 +97,14 @@ function logUsage(route: string, model: string, usage: { input_tokens: number; o
   console.log(JSON.stringify({ kind: 'usage', route, model, input: usage.input_tokens, output: usage.output_tokens, usd: cost === null ? 'unknown' : Number(cost.toFixed(5)) }));
 }
 
+// Asks the database for one careful reply; false when today's are used up (or the check fails, to stay cheap)
+type Careful = () => Promise<boolean>;
+
 // Structured outputs: Claude's reply is guaranteed to match the JSON schema
-async function askForJson<T>(prompt: string, schema: Record<string, unknown>, opts: { route: string; effort: Effort; settings: Settings; history?: Anthropic.Beta.BetaMessageParam[]; light?: boolean }): Promise<T> {
-  const model = opts.light ? LIGHT_MODEL : MODEL;
+async function askForJson<T>(prompt: string, schema: Record<string, unknown>, opts: { route: string; effort: Effort; settings: Settings; history?: Anthropic.Beta.BetaMessageParam[]; light?: boolean; crisis?: boolean; careful?: Careful }): Promise<T> {
+  // A heavy moment uses the careful model only while this phone has careful replies left today
+  const light = opts.light || (!opts.crisis && !!opts.careful && !(await opts.careful()));
+  const model = light ? LIGHT_MODEL : MODEL;
   const useFallback = FALLBACK_MODELS.includes(model);
   const res = await client.beta.messages.create({
     model,
@@ -129,7 +138,7 @@ const TASK_SCHEMA = obj({
   repeat: { ...nullable({ type: 'string', enum: ['daily', 'weekly', 'monthly'] }), description: 'Only if they say it repeats, e.g. "every Saturday", "monthly bill"' },
 });
 
-function dump(body: { raw: string; now: string; offset: string; settings: Settings }) {
+function dump(body: { raw: string; now: string; offset: string; settings: Settings }, careful: Careful) {
   return askForJson(
     `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nBRAIN DUMP:\n${String(body.raw).slice(0, 3000)}\n\n` +
       'Summarize what is on their mind in 2-3 sentences, in your own voice as Kasama (reply in English). Pull out every concrete task with a short verb-first title, leaving the date and time out of the title. ' +
@@ -137,7 +146,7 @@ function dump(body: { raw: string; now: string; offset: string; settings: Settin
       'Estimate duration in minutes. Ideas, plans for someday, feelings and loose thoughts go in ideas (short, one per item), not tasks. ' +
       'In heads_up, warn about deadlines that clash with fixed blocks or look unrealistic.',
     obj({ summary: str, tasks: { type: 'array', items: TASK_SCHEMA }, ideas: strList, heads_up: strList }),
-    { route: 'dump', effort: 'low', settings: body.settings, light: !HEAVY.test(String(body.raw)) },
+    { route: 'dump', effort: 'low', settings: body.settings, light: !HEAVY.test(String(body.raw)), crisis: CRISIS.test(String(body.raw)), careful },
   );
 }
 
@@ -162,7 +171,7 @@ const HISTORY = 6;
 
 type ChatTurn = { role: 'user' | 'assistant'; text: string };
 
-function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; now: string; offset: string; settings: Settings }) {
+function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; now: string; offset: string; settings: Settings }, careful: Careful) {
   // Earlier turns go in as plain text, so Kasama remembers what you just talked about
   const history: Anthropic.Beta.BetaMessageParam[] = (body.history ?? []).slice(-HISTORY).map((m) => ({ role: m.role, content: String(m.text).slice(0, 2000) }));
   while (history.length && history[0].role !== 'user') history.shift();
@@ -187,7 +196,7 @@ function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; no
       alarms: { type: 'array', items: obj({ at: str, label: str }) },
     }),
     // Everyday chat uses the light model; feelings in this message or the last few go to the careful one
-    { route: 'chat', effort: 'low', settings: body.settings, history, light: !HEAVY.test([body.message, ...(body.history ?? []).slice(-4).map((m) => m.text)].join(' ')) },
+    { route: 'chat', effort: 'low', settings: body.settings, history, light: !HEAVY.test([body.message, ...(body.history ?? []).slice(-4).map((m) => m.text)].join(' ')), crisis: CRISIS.test(String(body.message)), careful },
   );
 }
 
@@ -256,9 +265,15 @@ Deno.serve(async (req) => {
     const raw = await req.text();
     if (raw.length > MAX_BODY) return json({ error: 'That message is too long. Try splitting it up.' }, 413);
     const body = clean(JSON.parse(raw));
-    if (body.action === 'dump') return json(await dump(body as never));
+    const userId = who.user.id;
+    const careful: Careful = async () => {
+      const { data, error } = await admin.rpc('use_careful', { p_user: userId, p_limit: CAREFUL_DAILY_LIMIT });
+      if (error) console.error('careful check failed', error);
+      return !error && data === true;
+    };
+    if (body.action === 'dump') return json(await dump(body as never, careful));
     if (body.action === 'plan') return json(await plan(body as never));
-    if (body.action === 'chat') return json(await chat(body as never));
+    if (body.action === 'chat') return json(await chat(body as never, careful));
     return json({ error: 'Unknown action' }, 400);
   } catch (e) {
     // Details go to the Supabase logs, not to the phone
