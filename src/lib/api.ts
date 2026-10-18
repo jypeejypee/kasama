@@ -12,6 +12,8 @@ export const DEMO = !URL;
 
 async function call<T>(action: 'dump' | 'plan' | 'chat', payload: Record<string, unknown>): Promise<T> {
   if (!URL) throw new Error('EXPO_PUBLIC_ASSISTANT_URL is missing in .env');
+  // The app secret travels in a header, so never send it over plain http
+  if (!URL.startsWith('https://')) throw new Error('EXPO_PUBLIC_ASSISTANT_URL must start with https://');
   const now = describeNow();
   const res = await fetch(URL, {
     method: 'POST',

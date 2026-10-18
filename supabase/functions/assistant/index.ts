@@ -74,7 +74,8 @@ async function askForJson<T>(prompt: string, schema: Record<string, unknown>, op
   const useFallback = FALLBACK_MODELS.includes(MODEL);
   const res = await client.beta.messages.create({
     model: MODEL,
-    max_tokens: 16000,
+    // Caps the cost of a single request; Kasama's answers are short, so this leaves plenty of room
+    max_tokens: opts.effort === 'low' ? 4000 : 8000,
     system: persona(opts.settings) + aboutText(opts.settings),
     output_config: { effort: opts.effort, format: { type: 'json_schema', schema } },
     messages: [...(opts.history ?? []), { role: 'user', content: prompt }],
@@ -159,19 +160,68 @@ function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; no
   );
 }
 
+// The app secret ships inside the APK, so treat it as a speed bump, not real auth.
+// These limits keep a leaked secret from draining your Claude credit (also set a spend limit in the Anthropic console).
+const MAX_BODY = 64 * 1024; // bytes
+const LIMIT = { requests: 40, perMs: 10 * 60 * 1000 }; // per caller, best effort (resets when the function restarts)
+const seen = new Map<string, number[]>();
+
+function tooMany(caller: string) {
+  const now = Date.now();
+  const recent = (seen.get(caller) ?? []).filter((t) => now - t < LIMIT.perMs);
+  recent.push(now);
+  seen.set(caller, recent);
+  if (seen.size > 5000) seen.clear(); // never grow without bound
+  return recent.length > LIMIT.requests;
+}
+
+// Compare secrets without leaking how many characters matched
+function sameSecret(given: string | null, expected: string) {
+  const a = new TextEncoder().encode(given ?? '');
+  const b = new TextEncoder().encode(expected);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
+  return diff === 0;
+}
+
+// Only trust the shape we expect from the app
+function clean(body: Record<string, unknown>) {
+  const s = (body.settings ?? {}) as Settings;
+  const blocks = Array.isArray(s.fixedBlocks) ? s.fixedBlocks.slice(0, 20) : [];
+  const settings: Settings = {
+    ...s,
+    fixedBlocks: blocks.map((b) => ({ label: String(b.label).slice(0, 60), days: (Array.isArray(b.days) ? b.days : []).map(Number).filter((d) => d >= 0 && d <= 6), start: String(b.start).slice(0, 5), end: String(b.end).slice(0, 5) })),
+    name: s.name ? String(s.name).slice(0, 40) : undefined,
+    aboutMe: s.aboutMe ? String(s.aboutMe) : undefined,
+  };
+  const history = (Array.isArray(body.history) ? body.history : []).slice(-12).map((m: { role?: string; text?: string }) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', text: String(m.text ?? '') }));
+  return { ...body, settings, history, tasks: Array.isArray(body.tasks) ? body.tasks.slice(0, 200) : [], now: String(body.now ?? '').slice(0, 80), offset: String(body.offset ?? '+08:00').slice(0, 6) };
+}
+
 Deno.serve(async (req) => {
   const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
   if (req.method !== 'POST') return json({ error: 'Use POST' }, 405);
-  if (req.headers.get('x-app-secret') !== Deno.env.get('APP_SECRET')) return json({ error: 'Wrong app secret' }, 401);
+  const secret = Deno.env.get('APP_SECRET');
+  if (!secret || !Deno.env.get('ANTHROPIC_API_KEY')) return json({ error: 'Kasama is not set up yet. Add APP_SECRET and ANTHROPIC_API_KEY in Supabase secrets.' }, 500);
+  if (!sameSecret(req.headers.get('x-app-secret'), secret)) return json({ error: 'Wrong app secret' }, 401);
+  const caller = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+  if (tooMany(caller)) return json({ error: 'Too many requests. Take a breath and try again in a few minutes.' }, 429);
 
   try {
-    const body = await req.json();
-    if (body.action === 'dump') return json(await dump(body));
-    if (body.action === 'plan') return json(await plan(body));
-    if (body.action === 'chat') return json(await chat(body));
+    const raw = await req.text();
+    if (raw.length > MAX_BODY) return json({ error: 'That message is too long. Try splitting it up.' }, 413);
+    const body = clean(JSON.parse(raw));
+    if (body.action === 'dump') return json(await dump(body as never));
+    if (body.action === 'plan') return json(await plan(body as never));
+    if (body.action === 'chat') return json(await chat(body as never));
     return json({ error: 'Unknown action' }, 400);
   } catch (e) {
-    if (e instanceof Anthropic.APIError) return json({ error: `Claude error ${e.status}: ${e.message}` }, 502);
-    return json({ error: (e as Error).message }, 500);
+    // Details go to the Supabase logs, not to the phone
+    console.error('assistant error', e);
+    if (e instanceof SyntaxError) return json({ error: 'The request was not valid.' }, 400);
+    if (e instanceof Anthropic.APIError) return json({ error: e.status === 429 ? 'Claude is busy right now. Try again in a minute.' : `Claude had a problem (${e.status}). Try again in a moment.` }, 502);
+    const msg = (e as Error).message;
+    // Our own friendly errors (refusal, too long) are safe to show; anything else stays generic
+    return json({ error: /^(Claude declined|The answer was too long|Claude did not return)/.test(msg) ? msg : 'Something went wrong on my side. Try again in a moment.' }, 500);
   }
 });

@@ -145,7 +145,8 @@ export function onReminderTap(open: (url: string) => void): () => void {
   const n = Notifications;
   const handle = (response: NotificationsLib.NotificationResponse | null) => {
     const url = response?.notification.request.content.data?.url;
-    if (typeof url === 'string') open(url);
+    // Only open screens inside Kasama ("/", "/things" …), never anything else
+    if (typeof url === 'string' && /^\/[a-z-]*$/.test(url)) open(url);
   };
   try {
     handle(n.getLastNotificationResponse());
