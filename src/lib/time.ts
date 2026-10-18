@@ -34,3 +34,17 @@ export const validHHMM = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 
 // "2026-10-18" in the phone's own time zone (toISOString would use UTC and shift late nights)
 export const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// Friendly time typing: "7:00", "7", "7pm", "7:30 PM", "19:30" → "07:00" / "19:30" (null if it isn't a time)
+export function toHHMM(input: string): string | null {
+  const t = input.trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!t) return null;
+  let h = Number(t[1]);
+  const m = Number(t[2] ?? 0);
+  if (t[3]) {
+    if (h < 1 || h > 12) return null;
+    h = (h % 12) + (t[3] === 'pm' ? 12 : 0);
+  }
+  if (h > 23 || m > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}

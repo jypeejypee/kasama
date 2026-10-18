@@ -8,7 +8,7 @@ import { Button, Chip, DemoBadge, H, Muted, Title } from '@/components/ui';
 import { FONT, setPlace, useColors } from '@/lib/theme';
 import { DEFAULT_SETTINGS, getSettings, getTasks, newId, saveSettings, saveTasks } from '@/lib/storage';
 import { rescheduleAll, sendTestNotification, setupNotifications } from '@/lib/notifications';
-import { validHHMM } from '@/lib/time';
+import { toHHMM } from '@/lib/time';
 import { DEMO } from '@/lib/api';
 import type { Encourage, Faith, FixedBlock, Person, Place, Reminders, Settings, Support } from '@/lib/types';
 import { connectCalendars, type PhoneCalendar } from '@/lib/calendar';
@@ -35,6 +35,8 @@ export default function You() {
   const insets = useSafeAreaInsets();
   const [s, setS] = useState<Settings>(DEFAULT_SETTINGS);
   const [msg, setMsg] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [who, setWho] = useState({ name: '', how: 'sms' as Person['how'], handle: '' });
   const [cals, setCals] = useState<PhoneCalendar[] | null>(null);
   const [calMsg, setCalMsg] = useState('');
@@ -86,11 +88,32 @@ export default function You() {
   }
 
   async function save() {
-    const times = [s.morningDigest, s.eveningReview, ...s.fixedBlocks.flatMap((b) => [b.start, b.end])];
-    if (!times.every(validHHMM)) return setMsg('Use 24-hour times like 07:00 or 21:30.');
-    await saveSettings(s);
-    await rescheduleAll();
-    setMsg('Saved. Your reminders follow these now.');
+    // Accept times the way people type them ("7", "7pm", "7:30 PM") and tidy them to 07:00 style
+    const bad: string[] = [];
+    const fix = (value: string, label: string) => { const t = toHHMM(value); if (!t) bad.push(label); return t ?? value; };
+    const next: Settings = {
+      ...s,
+      morningDigest: fix(s.morningDigest, 'Morning hello'),
+      eveningReview: fix(s.eveningReview, 'Evening check-in'),
+      fixedBlocks: s.fixedBlocks.map((b) => ({ ...b, start: fix(b.start, `${b.label} start`), end: fix(b.end, `${b.label} end`) })),
+    };
+    if (bad.length) {
+      setSaved(false);
+      return setMsg(`I couldn't read the time for ${bad.join(', ')}. Try something like 7:00 or 7pm.`);
+    }
+    setSaving(true);
+    setMsg('');
+    try {
+      setS(next);
+      await saveSettings(next);
+      await rescheduleAll();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      setMsg(`Couldn't save just now: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function test() {
@@ -185,8 +208,9 @@ export default function You() {
       <Button title="+ Add a block" variant="link" onPress={() => setS({ ...s, fixedBlocks: [...s.fixedBlocks, { id: newId(), label: 'New block', days: [1, 2, 3, 4, 5], start: '19:00', end: '20:00' }] })} />
 
       <View style={{ height: 6 }} />
-      <Button title="Save" onPress={save} />
-      {!!msg && <Text style={{ color: c.accent, fontFamily: FONT.strong, fontSize: 15, textAlign: 'center' }}>{msg}</Text>}
+      {!!msg && <Text style={{ color: /^(I couldn't|Couldn't|Notifications are off|This phone)/.test(msg) ? c.high : c.accent, fontFamily: FONT.strong, fontSize: 15, textAlign: 'center' }}>{msg}</Text>}
+      <Button title={saved ? 'Saved ✓' : 'Save'} onPress={save} busy={saving} />
+      {saved && <Muted style={{ textAlign: 'center' }}>Your reminders follow these now.</Muted>}
 
       <H>Your people</H>
       <Muted>Someone you trust. Now and then I&apos;ll remind you to say hi. I only open your own messaging app; I never message anyone myself.</Muted>
