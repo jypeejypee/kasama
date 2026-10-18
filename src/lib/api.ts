@@ -53,5 +53,5 @@ export async function chat(message: string, history: ChatMessage[], tasks: Task[
   if (DEMO) return mockChat(message, tasks);
   const local = await localCommand(message, tasks);
   if (local) return local;
-  return call<ChatResult>('chat', { message, history: history.slice(-12).map((m) => ({ role: m.role, text: m.text })), tasks: openTasks(tasks), settings: forCloud(settings) });
+  return call<ChatResult>('chat', { message, history: history.slice(-6).map((m) => ({ role: m.role, text: m.text })), tasks: openTasks(tasks), settings: forCloud(settings) });
 }

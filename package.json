@@ -41,7 +41,7 @@
     "typecheck": "tsc --noEmit",
     "build:apk": "npx eas-cli@latest build -p android --profile preview",
     "lint": "expo lint",
-    "update:phone": "npx eas-cli@latest update --channel preview --environment preview --message"
+    "update:phone": "npx eas-cli@latest update --channel preview --environment preview --platform android --message"
   },
   "private": true
 }

@@ -31,6 +31,8 @@ export function voiceTarget(t: Target) {
 }
 
 const NO_SERVICE = "This phone has no voice service I can use. Install or turn on Google's \"Speech Recognition & Synthesis\" (or the Google app), then try again.";
+// Huawei phones without Google only have Huawei's assistant, which often won't listen for other apps
+const HUAWEI = "Your phone's voice service (Huawei) won't listen for other apps. Tap the mic on your keyboard instead, it works the same.";
 
 let kept = ''; // what was already in the box, plus everything you finished saying
 const join = (a: string, b: string) => (a.trim() ? `${a.trim()}${/[,.!?]$/.test(a.trim()) ? '' : ','} ${b}` : b);
@@ -46,11 +48,24 @@ const SERVICES = ['com.google.android.tts', 'com.google.android.googlequicksearc
 let options: (string | undefined)[] = [undefined];
 let attempt = 0;
 let starting = false; // one tap = one listening session, never two
+let huaweiOnly = false; // no Google voice service, only Huawei's
+
+// Errors that mean "not this language or service", worth one more try in English
+const RETRY_IN_ENGLISH = new Set(['language-not-supported', 'client', 'server', 'busy', 'service-not-allowed', 'bad-grammar', 'audio-capture']);
+
+// Nothing more to try: say so kindly, and open the keyboard so its own mic is one tap away
+function giveUp(note: string) {
+  starting = false;
+  set({ listening: false, note });
+  target?.focus();
+}
 
 function pickOptions() {
+  huaweiOnly = false;
   if (!Speech || Platform.OS !== 'android') return [undefined];
   try {
     const have = Speech.ExpoSpeechRecognitionModule.getSpeechRecognitionServices();
+    huaweiOnly = have.length > 0 && have.every((p) => p.startsWith('com.huawei'));
     return [...SERVICES.filter((p) => have.includes(p)), undefined];
   } catch {
     return [undefined];
@@ -92,8 +107,9 @@ if (Speech) {
     }
   });
   m.addListener('error', (e) => {
-    // This phone can't do Filipino recognition: try again in English (it still catches most Taglish)
-    if (e.error === 'language-not-supported' && lang !== 'en-US') {
+    // Filipino didn't work here (phones report this in different ways): try once more in English,
+    // which still catches most Taglish
+    if (RETRY_IN_ENGLISH.has(e.error) && lang !== 'en-US') {
       lang = 'en-US';
       fellBack = true;
       begin();
@@ -105,14 +121,18 @@ if (Speech) {
       begin();
       return;
     }
-    starting = false;
-    const note = e.error === 'not-allowed' ? 'I need the microphone to hear you. Allow it in your phone settings.'
-      : e.error === 'no-speech' || e.error === 'speech-timeout' ? "I didn't catch anything. Tap the mic and try again."
-      : e.error === 'aborted' ? ''
-      : e.error === 'network' ? 'Voice needs internet on this phone. Try again when you are online, or type instead.'
+    if (e.error === 'not-allowed' || e.error === 'no-speech' || e.error === 'speech-timeout' || e.error === 'aborted' || e.error === 'network') {
+      starting = false;
+      const note = e.error === 'not-allowed' ? 'I need the microphone to hear you. Allow it in your phone settings.'
+        : e.error === 'aborted' ? ''
+        : e.error === 'network' ? 'Voice needs internet on this phone. Try again when you are online, or type instead.'
+        : "I didn't catch anything. Tap the mic and try again.";
+      set({ listening: false, note });
+      return;
+    }
+    giveUp(huaweiOnly ? HUAWEI
       : e.error === 'service-not-allowed' || e.error === 'language-not-supported' ? NO_SERVICE
-      : `I couldn't hear you just now (${e.error}). Try again, or type instead.`;
-    set({ listening: false, note });
+      : `I couldn't hear you just now (${e.error}). Tap the mic on your keyboard, or type instead.`);
   });
 }
 
@@ -129,7 +149,12 @@ export async function toggleListening() {
   }
   if (starting) return; // already getting ready from an earlier tap
   starting = true;
-  setTimeout(() => { starting = false; }, 8000); // never stay stuck if the phone stays silent
+  // Never stay stuck: some phones (often Huawei) never answer at all
+  setTimeout(() => {
+    if (!starting) return;
+    starting = false;
+    if (!state.listening) giveUp(huaweiOnly ? HUAWEI : "The voice service didn't answer. Tap the mic on your keyboard, or type instead.");
+  }, 8000);
   const perm = await m.requestPermissionsAsync();
   if (!perm.granted) {
     starting = false;
@@ -173,6 +198,7 @@ export async function voiceReport(): Promise<string[]> {
       const have = m.getSpeechRecognitionServices();
       lines.push(`Voice services on this phone: ${have.length ? have.join(', ') : 'none found'}`);
       lines.push(`Kasama will use: ${SERVICES.find((p) => have.includes(p)) ?? 'the phone default'}`);
+      if (have.length && have.every((p) => p.startsWith('com.huawei'))) lines.push("Note: only Huawei's voice service is here. It often won't listen for other apps, so the keyboard mic is the fallback.");
     } catch (e) {
       lines.push(`Voice services: could not check (${(e as Error).message})`);
     }

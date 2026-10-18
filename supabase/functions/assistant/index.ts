@@ -82,8 +82,18 @@ const NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const scheduleText = (s: Settings) => (s?.fixedBlocks ?? []).map((b) => `- ${b.label}: ${b.days.map((d) => NAMES[d]).join(', ')} ${b.start}-${b.end}`).join('\n');
 const aboutText = (s: Settings) => (s?.aboutMe?.trim() ? `\n\nWhat they told you about themselves (follow it):\n${s.aboutMe.trim().slice(-4000)}` : '');
 
+// Dollars per million tokens (input, output), for the cost estimate in the logs
+const PRICES: Record<string, [number, number]> = { 'claude-sonnet-5-5': [2, 10], 'claude-haiku-5-5': [0.1, 0.5] };
+
+// One line per Claude call in the Supabase function logs: which job, which model, real tokens, estimated cost
+function logUsage(route: string, model: string, usage: { input_tokens: number; output_tokens: number }) {
+  const price = PRICES[model];
+  const cost = price ? (usage.input_tokens * price[0] + usage.output_tokens * price[1]) / 1_000_000 : null;
+  console.log(JSON.stringify({ kind: 'usage', route, model, input: usage.input_tokens, output: usage.output_tokens, usd: cost === null ? 'unknown' : Number(cost.toFixed(5)) }));
+}
+
 // Structured outputs: Claude's reply is guaranteed to match the JSON schema
-async function askForJson<T>(prompt: string, schema: Record<string, unknown>, opts: { effort: Effort; settings: Settings; history?: Anthropic.Beta.BetaMessageParam[]; light?: boolean }): Promise<T> {
+async function askForJson<T>(prompt: string, schema: Record<string, unknown>, opts: { route: string; effort: Effort; settings: Settings; history?: Anthropic.Beta.BetaMessageParam[]; light?: boolean }): Promise<T> {
   const model = opts.light ? LIGHT_MODEL : MODEL;
   const useFallback = FALLBACK_MODELS.includes(model);
   const res = await client.beta.messages.create({
@@ -95,6 +105,7 @@ async function askForJson<T>(prompt: string, schema: Record<string, unknown>, op
     messages: [...(opts.history ?? []), { role: 'user', content: prompt }],
     ...(useFallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
   });
+  logUsage(opts.route, res.model ?? model, res.usage);
   if (res.stop_reason === 'refusal') throw new Error('Claude declined this request. Try rewording it.');
   if (res.stop_reason === 'max_tokens') throw new Error('The answer was too long. Try a shorter message.');
   const text = res.content.find((b) => b.type === 'text');
@@ -125,7 +136,7 @@ function dump(body: { raw: string; now: string; offset: string; settings: Settin
       'Estimate duration in minutes. Ideas, plans for someday, feelings and loose thoughts go in ideas (short, one per item), not tasks. ' +
       'In heads_up, warn about deadlines that clash with fixed blocks or look unrealistic.',
     obj({ summary: str, tasks: { type: 'array', items: TASK_SCHEMA }, ideas: strList, heads_up: strList }),
-    { effort: 'medium', settings: body.settings, light: !HEAVY.test(String(body.raw)) },
+    { route: 'dump', effort: 'medium', settings: body.settings, light: !HEAVY.test(String(body.raw)) },
   );
 }
 
@@ -140,15 +151,19 @@ function plan(body: { tasks: unknown[]; now: string; offset: string; settings: S
       blocks: { type: 'array', items: obj({ task_id: nullable(str), title: str, start: str, end: str }) },
       not_today: strList,
     }),
-    { effort: 'medium', settings: body.settings },
+    // Planning is careful scheduling, which the light model handles well at a fraction of the cost
+    { route: 'plan', effort: 'medium', settings: body.settings, light: true },
   );
 }
+
+// Earlier messages resent with each chat. Every one is paid for again, so keep it short.
+const HISTORY = 6;
 
 type ChatTurn = { role: 'user' | 'assistant'; text: string };
 
 function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; now: string; offset: string; settings: Settings }) {
   // Earlier turns go in as plain text, so Kasama remembers what you just talked about
-  const history: Anthropic.Beta.BetaMessageParam[] = (body.history ?? []).slice(-12).map((m) => ({ role: m.role, content: String(m.text).slice(0, 2000) }));
+  const history: Anthropic.Beta.BetaMessageParam[] = (body.history ?? []).slice(-HISTORY).map((m) => ({ role: m.role, content: String(m.text).slice(0, 2000) }));
   while (history.length && history[0].role !== 'user') history.shift();
   return askForJson(
     `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nTheir open tasks (with ids):\n${JSON.stringify(body.tasks).slice(0, 12000)}\n\n` +
@@ -171,7 +186,7 @@ function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; no
       alarms: { type: 'array', items: obj({ at: str, label: str }) },
     }),
     // Everyday chat uses the light model; feelings in this message or the last few go to the careful one
-    { effort: 'low', settings: body.settings, history, light: !HEAVY.test([body.message, ...(body.history ?? []).slice(-4).map((m) => m.text)].join(' ')) },
+    { route: 'chat', effort: 'low', settings: body.settings, history, light: !HEAVY.test([body.message, ...(body.history ?? []).slice(-4).map((m) => m.text)].join(' ')) },
   );
 }
 
@@ -211,7 +226,7 @@ function clean(body: Record<string, unknown>) {
     aboutMe: s.aboutMe ? String(s.aboutMe) : undefined,
     people: Array.isArray(s.people) ? s.people.slice(0, 5).map((p) => String(p).slice(0, 30)) : undefined,
   };
-  const history = (Array.isArray(body.history) ? body.history : []).slice(-12).map((m: { role?: string; text?: string }) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', text: String(m.text ?? '') }));
+  const history = (Array.isArray(body.history) ? body.history : []).slice(-HISTORY).map((m: { role?: string; text?: string }) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', text: String(m.text ?? '') }));
   return { ...body, settings, history, tasks: Array.isArray(body.tasks) ? body.tasks.slice(0, 200) : [], now: String(body.now ?? '').slice(0, 80), offset: String(body.offset ?? '+08:00').slice(0, 6) };
 }
 
