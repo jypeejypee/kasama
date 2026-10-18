@@ -190,6 +190,8 @@ The bottom bar: **Home · Things · (Kasama) · Journey · You**.
 4. **Home screen shortcut or widget** that opens Kasama already listening.
 5. **Gentle motion:** rocking boats, drifting clouds, a breathing logo (React Native Reanimated).
 6. **Link with JobPilot:** when a job scores 80+, add "Apply to …" as a task.
+7. **Philippine holidays:** a fixed list of PH holidays (regular, special non-working, and long weekends), kept on the phone, so it costs no Claude credit. Kasama mentions them gently: *"Bukas ay holiday. Want me to keep your day light?"* and *"Long weekend coming. Pay Meralco before Friday so you can rest."* Plan my day treats a holiday as a lighter day, and the calendar view marks them. Update the list once a year, since some dates are only announced by proclamation.
+8. **"Right on time" reminders (Android 14+):** the exact-alarm permission (`SCHEDULE_EXACT_ALARM`) is off by default on newer phones, so reminders can arrive a few minutes late. Check whether it's allowed, and if not, show a gentle, skippable card: *"Want reminders right on time? Turn on 'Alarms & reminders' for Kasama."* with a button that opens that setting (`android.settings.REQUEST_SCHEDULE_EXACT_ALARM` via expo-intent-launcher). Never nag: ask once, and keep it in You → Reminders afterwards. Needs a new build; fits the first Play Store build.
 
 ## Troubleshooting
 
