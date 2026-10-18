@@ -44,10 +44,12 @@ export default function KasamaScreen() {
   const textRef = useRef(text);
   useEffect(() => { textRef.current = text; }, [text]);
   const sending = useRef(false); // state updates too late to stop a quick double tap
+  const sendRef = useRef<(t: string) => void>(() => {}); // the latest send, for the mic to call
 
   useFocusEffect(useCallback(() => { getChat().then(setMessages); }, []));
   // While you're here, speaking fills the message box
-  useFocusEffect(useCallback(() => voiceTarget({ get: () => textRef.current, put: setText, focus: () => input.current?.focus() }), []));
+  // and when you stop talking, it's sent for you
+  useFocusEffect(useCallback(() => voiceTarget({ get: () => textRef.current, put: setText, focus: () => input.current?.focus(), send: (t) => sendRef.current(t) }), []));
   // Leaving this screen ends Undo: you may change things elsewhere, and Undo must never wipe those
   useFocusEffect(useCallback(() => () => setSnap(null), []));
 
@@ -105,6 +107,7 @@ export default function KasamaScreen() {
       sending.current = false;
     }
   }
+  useEffect(() => { sendRef.current = (t) => { send(t); }; });
 
   // Put tasks, ideas and memory back exactly as they were before Kasama's last change
   async function undo() {

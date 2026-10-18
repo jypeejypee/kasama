@@ -22,8 +22,8 @@ const set = (patch: Partial<State>) => { state = { ...state, ...patch }; listene
 const subscribe = (l: () => void) => { listeners.add(l); return () => listeners.delete(l); };
 export const useVoice = () => useSyncExternalStore(subscribe, () => state, () => state);
 
-// The Kasama screen tells us how to read and write its text box
-type Target = { get: () => string; put: (text: string) => void; focus: () => void };
+// The Kasama screen tells us how to read and write its text box, and how to send it
+type Target = { get: () => string; put: (text: string) => void; focus: () => void; send?: (text: string) => void };
 let target: Target | null = null;
 export function voiceTarget(t: Target) {
   target = t;
@@ -35,6 +35,7 @@ const NO_SERVICE = "This phone has no voice service I can use. Install or turn o
 const HUAWEI = "Your phone's voice service (Huawei) won't listen for other apps. Tap the mic on your keyboard instead, it works the same.";
 
 let kept = ''; // what was already in the box, plus everything you finished saying
+let heard = false; // you said something this time, so it's sent as a message when you stop
 const join = (a: string, b: string) => (a.trim() ? `${a.trim()}${/[,.!?]$/.test(a.trim()) ? '' : ','} ${b}` : b);
 
 // Filipino recognition also understands English words, so Taglish works; English is the fallback
@@ -93,12 +94,21 @@ if (Speech) {
   m.addListener('start', () => {
     starting = false;
     const how = fellBack ? 'in English, because this phone has no Filipino voice yet' : lang === 'fil-PH' ? 'in Filipino' : 'in English';
-    set({ listening: true, note: `I'm listening ${how}… tap the mic again when you're done.` });
+    set({ listening: true, note: `I'm listening ${how}… tap the mic when you're done and I'll send it.` });
   });
-  m.addListener('end', () => set({ listening: false, note: state.note.startsWith("I'm listening") ? '' : state.note }));
+  m.addListener('end', () => {
+    set({ listening: false, note: state.note.startsWith("I'm listening") ? '' : state.note });
+    // Mic to chat: when you stop talking, what you said goes to Kasama like a typed message
+    if (heard && !starting) {
+      heard = false;
+      const said = target?.get().trim();
+      if (said) target?.send?.(said);
+    }
+  });
   m.addListener('result', (e) => {
     const said = e.results[0]?.transcript?.trim();
     if (!said) return;
+    heard = true;
     if (e.isFinal) {
       kept = join(kept, said);
       target?.put(kept);
@@ -167,6 +177,7 @@ export async function toggleListening() {
     return;
   }
   kept = target?.get() ?? '';
+  heard = false;
   lang = (await getSettings()).voiceLang ?? 'fil-PH'; // chosen in You → Voice
   fellBack = false;
   options = pickOptions();
