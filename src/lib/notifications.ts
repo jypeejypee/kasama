@@ -162,6 +162,15 @@ function topTasks(open: Task[]) {
     .join('  ');
 }
 
+// "Delete my data": no reminder should fire about things that are gone
+export async function cancelAllReminders() {
+  try {
+    await lib().cancelAllScheduledNotificationsAsync();
+  } catch (e) {
+    console.warn('Kasama could not cancel reminders:', (e as Error).message);
+  }
+}
+
 export async function sendTestNotification() {
   await lib().scheduleNotificationAsync({
     content: { title: 'Kasama is working', body: 'Reminders will look like this.' },

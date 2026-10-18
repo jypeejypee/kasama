@@ -52,3 +52,4 @@ export function accessToken() {
 }
 
 export const forgetSession = () => AsyncStorage.removeItem(KEY);
+export const hasSession = async () => !!(await load());

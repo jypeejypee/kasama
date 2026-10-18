@@ -1,6 +1,6 @@
 import { describeNow } from './time';
 import { localCommand, mockChat, mockDump, mockPlan } from './mock';
-import { accessToken, forgetSession } from './session';
+import { accessToken, forgetSession, hasSession } from './session';
 import { busyAsBlocks, busyToday } from './calendar';
 import type { ChatMessage, ChatResult, DayPlan, DumpResult, Settings, Task } from './types';
 
@@ -12,7 +12,7 @@ const SECRET = process.env.EXPO_PUBLIC_APP_SECRET;
 // No backend URL yet → demo mode: simple on-phone rules answer instead of Claude (see mock.ts)
 export const DEMO = !URL;
 
-async function call<T>(action: 'dump' | 'plan' | 'chat', payload: Record<string, unknown>): Promise<T> {
+async function call<T>(action: 'dump' | 'plan' | 'chat' | 'report' | 'delete', payload: Record<string, unknown>): Promise<T> {
   if (!URL) throw new Error('EXPO_PUBLIC_ASSISTANT_URL is missing in .env');
   // The app secret travels in a header, so never send it over plain http
   if (!URL.startsWith('https://')) throw new Error('EXPO_PUBLIC_ASSISTANT_URL must start with https://');
@@ -32,6 +32,23 @@ async function call<T>(action: 'dump' | 'plan' | 'chat', payload: Record<string,
   }
   if (!res.ok) throw new Error(body.error ?? `Assistant error ${res.status}`);
   return body as T;
+}
+
+// Where the privacy policy and the "delete my data" instructions live (GitHub Pages, from the docs folder)
+export const PRIVACY_URL = 'https://jypeejypee.github.io/kasama/privacy.html';
+
+// "Report this reply": only the reply and the reason are sent, so it can be reviewed. Free: no Claude call.
+export async function reportReply(reply: string, reason: 'offensive' | 'wrong' | 'other') {
+  if (DEMO) return;
+  await call('report', { reply, reason });
+}
+
+// "Delete my data": removes this phone's anonymous account and its usage on the backend.
+// A phone that never talked to Claude has nothing there, so it skips the call (and never signs in just to delete).
+export async function deleteCloudData() {
+  if (DEMO || !(await hasSession())) return;
+  await call('delete', {});
+  await forgetSession();
 }
 
 // Only what Claude needs leaves the phone: first names of your people (never their numbers), no calendar ids,

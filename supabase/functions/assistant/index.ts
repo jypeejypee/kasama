@@ -18,7 +18,7 @@ const LIGHT_MODEL = Deno.env.get('CLAUDE_LIGHT_MODEL') ?? 'claude-haiku-5-5';
 // Feelings, stress or anything that may be serious always gets the careful model
 // Someone in danger gets the careful model even past today's limit (up to CRISIS_EXTRA more)
 const CRISIS = /\b(die|mamatay|patay|suicide|kill|self.?harm|ayoko na|wala nang|di ko na kaya|hindi ko na kaya|give up|suko)\b/i;
-const HEAVY = /\b(pagod|tired|exhausted|sad|lungkot|malungkot|iyak|cry|crying|stress|stressed|anxious|anxiety|kaba|takot|scared|afraid|lonely|alone|mag-isa|depress|hopeless|worthless|overwhelm|panic|hurt|sakit|ayoko na|give up|suko|die|mamatay|patay|suicide|kill|self.?harm|wala nang|di ko na kaya|hindi ko na kaya|help me|tulong)/i;
+const HEAVY = /\b(pagod|tired|exhausted|sad\b|lungkot|malungkot|iyak|cry|crying|stress|anxious|anxiety|kaba|takot|scared|afraid|lonely|alone|mag-isa|depress|hopeless|worthless|overwhelm|panic|hurt|sakit|help me|tulong)/i;
 // Supabase gives every Edge Function these two automatically
 const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } });
 // Testing-phase limits; raise them in Supabase secrets when you're ready
@@ -148,7 +148,7 @@ function dump(body: { raw: string; now: string; offset: string; settings: Settin
       'Estimate duration in minutes. Ideas, plans for someday, feelings and loose thoughts go in ideas (short, one per item), not tasks. ' +
       'In heads_up, warn about deadlines that clash with fixed blocks or look unrealistic.',
     obj({ summary: str, tasks: { type: 'array', items: TASK_SCHEMA }, ideas: strList, heads_up: strList }),
-    { route: 'dump', effort: 'low', settings: body.settings, light: !HEAVY.test(String(body.raw)), crisis: CRISIS.test(String(body.raw)), careful },
+    { route: 'dump', effort: 'low', settings: body.settings, light: !HEAVY.test(String(body.raw)) && !CRISIS.test(String(body.raw)), crisis: CRISIS.test(String(body.raw)), careful },
   );
 }
 
@@ -177,6 +177,8 @@ function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; no
   // Earlier turns go in as plain text, so Kasama remembers what you just talked about
   const history: Anthropic.Beta.BetaMessageParam[] = (body.history ?? []).slice(-HISTORY).map((m) => ({ role: m.role, content: String(m.text).slice(0, 2000) }));
   while (history.length && history[0].role !== 'user') history.shift();
+  // This message and the last few: feelings there mean a careful reply
+  const recent = [body.message, ...(body.history ?? []).slice(-4).map((m) => m.text)].join(' ');
   return askForJson(
     `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nTheir open tasks (with ids):\n${JSON.stringify(body.tasks).slice(0, 6000)}\n\n` +
       `THEY SAY:\n${String(body.message).slice(0, 1000)}\n\n` +
@@ -198,7 +200,7 @@ function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; no
       alarms: { type: 'array', items: obj({ at: str, label: str }) },
     }),
     // Everyday chat uses the light model; feelings in this message or the last few go to the careful one
-    { route: 'chat', effort: 'low', settings: body.settings, history, light: !HEAVY.test([body.message, ...(body.history ?? []).slice(-4).map((m) => m.text)].join(' ')), crisis: CRISIS.test(String(body.message)), careful },
+    { route: 'chat', effort: 'low', settings: body.settings, history, light: !HEAVY.test(recent) && !CRISIS.test(recent), crisis: CRISIS.test(String(body.message)), careful },
   );
 }
 
@@ -242,6 +244,26 @@ function clean(body: Record<string, unknown>) {
   return { ...body, settings, history, tasks: Array.isArray(body.tasks) ? body.tasks.slice(0, 30) : [], now: String(body.now ?? '').slice(0, 80), offset: String(body.offset ?? '+08:00').slice(0, 6) };
 }
 
+// "Report this reply": keeps only the reply and the reason, so you can review what Kasama said wrong
+const REASONS = ['offensive', 'wrong', 'other'];
+async function report(userId: string, body: { reply?: unknown; reason?: unknown }) {
+  const reply = String(body.reply ?? '').trim().slice(0, 2000);
+  const reason = REASONS.includes(String(body.reason)) ? String(body.reason) : 'other';
+  if (!reply) throw new Error('Nothing to report');
+  const { error } = await admin.from('reports').insert({ user_id: userId, reply, reason });
+  if (error) throw error;
+  console.log(JSON.stringify({ kind: 'report', reason }));
+  return { ok: true };
+}
+
+// "Delete my data": removes this phone's anonymous account. Its usage counts go with it,
+// and its reports stay only without any link to the phone.
+async function deleteEverything(userId: string) {
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) throw error;
+  return { ok: true };
+}
+
 Deno.serve(async (req) => {
   const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
   if (req.method !== 'POST') return json({ error: 'Use POST' }, 405);
@@ -255,19 +277,26 @@ Deno.serve(async (req) => {
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
   const { data: who, error: authError } = token ? await admin.auth.getUser(token) : { data: { user: null }, error: null };
   if (authError || !who.user) return json({ error: 'Please sign in again.', code: 'auth' }, 401);
-  // Counts this request, and says no once this phone (or everyone together) used up today's limit
-  const { data: allowed, error: usageError } = await admin.rpc('use_credit', { p_user: who.user.id, p_limit: DAILY_LIMIT, p_global: GLOBAL_DAILY_LIMIT });
-  if (usageError) {
-    console.error('usage check failed', usageError);
-    return json({ error: 'Something went wrong on my side. Try again in a moment.' }, 500);
-  }
-  if (!allowed) return json({ error: "We've talked a lot today. Let's rest and continue tomorrow." }, 429);
+  const userId = who.user.id;
 
   try {
     const raw = await req.text();
     if (raw.length > MAX_BODY) return json({ error: 'That message is too long. Try splitting it up.' }, 413);
-    const body = clean(JSON.parse(raw));
-    const userId = who.user.id;
+    const parsed = JSON.parse(raw);
+
+    // These two never call Claude, so they don't use today's limit
+    if (parsed.action === 'report') return json(await report(userId, parsed));
+    if (parsed.action === 'delete') return json(await deleteEverything(userId));
+
+    // Counts this request, and says no once this phone (or everyone together) used up today's limit
+    const { data: allowed, error: usageError } = await admin.rpc('use_credit', { p_user: userId, p_limit: DAILY_LIMIT, p_global: GLOBAL_DAILY_LIMIT });
+    if (usageError) {
+      console.error('usage check failed', usageError);
+      return json({ error: 'Something went wrong on my side. Try again in a moment.' }, 500);
+    }
+    if (!allowed) return json({ error: "We've talked a lot today. Let's rest and continue tomorrow." }, 429);
+
+    const body = clean(parsed);
     const careful: Careful = async (limit) => {
       const { data, error } = await admin.rpc('use_careful', { p_user: userId, p_limit: limit });
       if (error) console.error('careful check failed', error);

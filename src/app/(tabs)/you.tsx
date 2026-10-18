@@ -1,15 +1,15 @@
 import { useCallback, useState } from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KEYBOARD_BEHAVIOR } from '@/lib/keyboard';
 import { Button, Chip, DemoBadge, H, Muted, Title } from '@/components/ui';
 import { FONT, setPlace, useColors } from '@/lib/theme';
-import { DEFAULT_SETTINGS, getSettings, getTasks, newId, saveSettings, saveTasks } from '@/lib/storage';
-import { rescheduleAll, sendTestNotification, setupNotifications } from '@/lib/notifications';
+import { DEFAULT_SETTINGS, eraseEverything, getSettings, getTasks, newId, saveSettings, saveTasks } from '@/lib/storage';
+import { cancelAllReminders, rescheduleAll, sendTestNotification, setupNotifications } from '@/lib/notifications';
 import { toHHMM } from '@/lib/time';
-import { DEMO } from '@/lib/api';
+import { deleteCloudData, DEMO, PRIVACY_URL } from '@/lib/api';
 import type { Encourage, Faith, FixedBlock, Person, Place, Reminders, Settings, Support } from '@/lib/types';
 import { connectCalendars, type PhoneCalendar } from '@/lib/calendar';
 import { sayHi } from '@/lib/people';
@@ -133,6 +133,32 @@ export default function You() {
     const tasks = await getTasks();
     await saveTasks(tasks.filter((t) => t.status === 'todo'));
     setMsg('Cleared finished and let-go tasks.');
+  }
+
+  // "Delete my data": the backend first, then the phone. Required by Google Play for apps with accounts.
+  function confirmDelete() {
+    Alert.alert(
+      'Delete everything?',
+      'This erases your tasks, ideas, chat, memory and settings from this phone, and your anonymous account on the Kasama backend. It cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: deleteAll },
+      ],
+    );
+  }
+
+  async function deleteAll() {
+    try {
+      await deleteCloudData();
+    } catch (e) {
+      // Keep the phone data, so nothing is half-deleted; they can try again
+      Alert.alert("I couldn't reach the backend", `${(e as Error).message} Nothing was deleted. Try again when you're online.`);
+      return;
+    }
+    await cancelAllReminders();
+    await eraseEverything();
+    setPlace(DEFAULT_SETTINGS.place);
+    router.replace('/welcome');
   }
 
   return (
@@ -295,6 +321,10 @@ export default function You() {
       <Muted>{DEMO ? 'No backend connected yet, so I use simple on-phone rules. Add EXPO_PUBLIC_ASSISTANT_URL to .env to use Claude.' : 'Connected to your Kasama backend (Claude).'}</Muted>
       <Muted>{DEMO ? 'Everything stays on this phone.' : 'Your tasks and notes are saved on this phone. What you send me goes to the Kasama backend and Claude to get an answer.'}</Muted>
       <Button title="Clear finished tasks" variant="link" onPress={clearDone} />
+
+      <H>Your data</H>
+      <Button title="Privacy policy" variant="link" onPress={() => Linking.openURL(PRIVACY_URL)} />
+      <Button title="Delete my data" variant="link" onPress={confirmDelete} />
     </ScrollView>
     </KeyboardAvoidingView>
   );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, FlatList, KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, FlatList, KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,7 @@ import { Scene, TINTS, Vessel } from '@/components/Scene';
 import { Drift } from '@/components/Motion';
 import { FONT, useColors } from '@/lib/theme';
 import { useData } from '@/lib/useData';
-import { chat, MAX_CHAT_CHARS, MAX_DUMP_CHARS, sortThoughts } from '@/lib/api';
+import { chat, MAX_CHAT_CHARS, MAX_DUMP_CHARS, reportReply, sortThoughts } from '@/lib/api';
 import { addTasks, applyChatResult } from '@/lib/actions';
 import { addIdeas, getAlarms, getChat, getIdeas, getNotes, getSettings, getTasks, newId, saveAlarms, saveChat, saveIdeas, saveNotes, saveSettings, saveTasks } from '@/lib/storage';
 import { rescheduleAll } from '@/lib/notifications';
@@ -44,6 +44,24 @@ export default function KasamaScreen() {
   const textRef = useRef(text);
   useEffect(() => { textRef.current = text; }, [text]);
   const sending = useRef(false); // state updates too late to stop a quick double tap
+  const [reported, setReported] = useState<Set<string>>(new Set());
+
+  // "Report this reply": required for AI apps, and it tells you where Kasama went wrong
+  function askReport(m: ChatMessage) {
+    const send = async (reason: 'offensive' | 'wrong') => {
+      try {
+        await reportReply(m.text, reason);
+        setReported((r) => new Set(r).add(m.id));
+      } catch (e) {
+        Alert.alert("I couldn't send that report", `${(e as Error).message} Try again in a moment.`);
+      }
+    };
+    Alert.alert('Report this reply?', 'Only this reply is sent, so it can be checked and Kasama can do better.', [
+      { text: 'Offensive or harmful', onPress: () => send('offensive') },
+      { text: 'Wrong or unhelpful', onPress: () => send('wrong') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
   const sendRef = useRef<(t: string) => void>(() => {}); // the latest send, for the mic to call
 
   useFocusEffect(useCallback(() => { getChat().then(setMessages); }, []));
@@ -199,6 +217,9 @@ export default function KasamaScreen() {
                   <Text style={{ color: c.text, fontFamily: FONT.bold, fontSize: 14 }}>Undo</Text>
                 </Pressable>
               )}
+              <Pressable accessibilityRole="button" accessibilityLabel="Report this reply" disabled={reported.has(m.id)} onPress={() => askReport(m)} hitSlop={10} style={{ alignSelf: 'flex-start', marginLeft: 24, paddingVertical: 2 }}>
+                <Text style={{ color: c.muted, fontSize: 12, fontFamily: FONT.semi }}>{reported.has(m.id) ? 'Reported. Thank you.' : 'Report'}</Text>
+              </Pressable>
             </View>
           );
         }}

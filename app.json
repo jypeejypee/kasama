@@ -29,12 +29,6 @@
         "com.android.alarm.permission.SET_ALARM",
         "android.permission.READ_CALENDAR",
         "android.permission.RECORD_AUDIO",
-        "android.permission.WRITE_CALENDAR",
-        "SCHEDULE_EXACT_ALARM",
-        "POST_NOTIFICATIONS",
-        "com.android.alarm.permission.SET_ALARM",
-        "android.permission.READ_CALENDAR",
-        "android.permission.RECORD_AUDIO",
         "android.permission.WRITE_CALENDAR"
       ]
     },

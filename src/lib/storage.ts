@@ -84,6 +84,12 @@ export async function rememberLatest(prefix: string, fact: string) {
   await saveSettings({ ...s, aboutMe: [...lines, `- ${fact}`].join('\n') });
 }
 
+// "Delete my data": everything Kasama saved on this phone (tasks, chat, memory, settings, sign-in)
+export async function eraseEverything() {
+  const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith('kasama.'));
+  await AsyncStorage.multiRemove(keys);
+}
+
 export async function updateTask(id: string, patch: Partial<Task>) {
   const tasks = await getTasks();
   const next = tasks.map((t) => (t.id === id ? { ...t, ...patch } : t));
