@@ -53,6 +53,7 @@ export default function Home() {
   // Never more than three things on today's path. The rest waits in Things.
   const path: Task[] = [...planned, ...due, ...others].slice(0, 3);
   const waiting = open.length - missed.length - path.length;
+  const unplanned = path.filter((t) => !t.scheduled_start).length;
   const doneToday = tasks.filter((t) => t.status === 'done' && isToday(t.done_at));
   const soon = open.find((t) => t.due_at && new Date(t.due_at) > endOfDay() && new Date(t.due_at).getTime() - now.getTime() < 2 * 24 * 60 * 60 * 1000);
   const next = planned.find((t) => new Date(t.scheduled_start ?? 0) >= now) ?? path[0];
@@ -164,10 +165,10 @@ export default function Home() {
         {doneToday.map((t) => <TaskRow key={t.id} task={t} onToggle={() => toggle(t)} />)}
 
         <View style={{ height: 12 }} />
-        {open.length === 0 ? (
-          <Button title="Tell me what's on your mind" onPress={talk} />
-        ) : (
-          <Button title={mode === 'morning' ? 'Plan my day' : 'Plan the rest of my day'} onPress={plan} busy={busy} />
+        {open.length === 0 && <Button title="Tell me what's on your mind" onPress={talk} />}
+        {/* Planning is an offer, not the point of Home: it only shows when some of today's things have no time yet */}
+        {unplanned > 0 && missed.length === 0 && (
+          <Button title={unplanned === 1 ? 'Want me to find a time for it?' : 'Want me to find times for these?'} variant="link" onPress={plan} busy={busy} />
         )}
         {mode === 'night' && <Button title="Back to tonight's check-in" variant="link" onPress={() => setShowDay(false)} />}
       </View>

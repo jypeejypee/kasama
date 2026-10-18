@@ -4,7 +4,7 @@ import type { Alarm, ChatMessage, Idea, Mood, Note, Settings, Task } from './typ
 
 // Everything is saved on your phone. Simple, private and works offline.
 // (Later practice idea: sync to Supabase so it also shows on your laptop.)
-const KEYS = { tasks: 'kasama.tasks', notes: 'kasama.notes', settings: 'kasama.settings', ideas: 'kasama.ideas', chat: 'kasama.chat', alarms: 'kasama.alarms', moods: 'kasama.moods' };
+const KEYS = { tasks: 'kasama.tasks', notes: 'kasama.notes', settings: 'kasama.settings', ideas: 'kasama.ideas', chat: 'kasama.chat', alarms: 'kasama.alarms', moods: 'kasama.moods', lateNights: 'kasama.lateNights' };
 
 export const DEFAULT_SETTINGS: Settings = {
   morningDigest: '07:00',
@@ -47,6 +47,13 @@ export async function saveMood(feeling: Mood['feeling']) {
   const date = dayKey();
   const moods = (await getMoods()).filter((m) => m.date !== date);
   await write(KEYS.moods, [...moods, { date, feeling }].slice(-60));
+}
+
+// Evenings you were still up past bedtime (YYYY-MM-DD), so Journey can notice a pattern
+export const getLateNights = () => read<string[]>(KEYS.lateNights, []);
+export async function addLateNight(day: string) {
+  const days = await getLateNights();
+  if (!days.includes(day)) await write(KEYS.lateNights, [...days, day].slice(-30));
 }
 
 // Newest first. Skips ideas you already have.

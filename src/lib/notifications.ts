@@ -1,7 +1,8 @@
 import { Platform } from 'react-native';
 import type * as NotificationsLib from 'expo-notifications';
-import { getAlarms, getSettings, getTasks } from './storage';
-import { endOfDay, fmtTime, isToday, parseHHMM } from './time';
+import { addLateNight, getAlarms, getSettings, getTasks } from './storage';
+import { dayKey, endOfDay, fmtTime, isToday, parseHHMM } from './time';
+import { pastBedtime, sleepBlock, stillUpText } from './sleep';
 import type { Task } from './types';
 
 // Reminders are scheduled ON THE PHONE (local notifications). They fire even with no
@@ -94,8 +95,9 @@ async function scheduleEverything() {
   for (const a of alarms) {
     await lib().scheduleNotificationAsync({ content: { title: 'Alarm', body: a.label }, trigger: at(new Date(a.at)) });
   }
+  const bedtimes = await scheduleBedtime(settings);
   items.sort((a, b) => a.when.getTime() - b.when.getTime());
-  for (const it of items.slice(0, MAX_SCHEDULED - 2 - alarms.length)) {
+  for (const it of items.slice(0, MAX_SCHEDULED - 2 - alarms.length - bedtimes)) {
     await lib().scheduleNotificationAsync({ content: { title: it.title, body: it.body, data: it.url ? { url: it.url } : undefined }, trigger: at(it.when) });
   }
 
@@ -111,6 +113,37 @@ async function scheduleEverything() {
     content: { title: 'Evening check-in', body: checkInText(open), data: { url: '/' } },
     trigger: { type: lib().SchedulableTriggerInputTypes.DAILY, hour: evening.hour, minute: evening.minute, channelId: CHANNEL },
   });
+}
+
+// Bedtime, from your Sleep block. Two parts:
+// 1. A wind-down nudge 30 minutes before, on the nights you sleep (weekly, so it works even if you don't open Kasama).
+// 2. The dynamic part: if you open Kasama after bedtime, you're clearly still up, so I check on you again in 30 minutes.
+//    Opening it again pushes that back. It never fires for someone already asleep, because only being on the phone starts it.
+// Kasama can't see other apps, so scrolling TikTok without opening Kasama only gets the wind-down nudge.
+async function scheduleBedtime(settings: Awaited<ReturnType<typeof getSettings>>): Promise<number> {
+  const b = sleepBlock(settings);
+  if (!b || settings.bedtime === false) return 0;
+  let count = 0;
+  const { hour, minute } = parseHHMM(b.start);
+  const windDown = hour * 60 + minute - 30;
+  const wd = (windDown + 24 * 60) % (24 * 60);
+  for (const day of b.days) {
+    // If winding down starts before midnight, it's still the same evening; otherwise it's the next morning's weekday
+    const weekday = (windDown < 0 ? (day + 6) % 7 : day) + 1; // expo counts Sunday as 1
+    await lib().scheduleNotificationAsync({
+      content: { title: 'Time to wind down', body: `Bedtime is at ${fmtTime(new Date(2000, 0, 1, hour, minute).toISOString())}. Start putting things down. Tomorrow can wait.` },
+      trigger: { type: lib().SchedulableTriggerInputTypes.WEEKLY, weekday, hour: Math.floor(wd / 60), minute: wd % 60, channelId: CHANNEL },
+    });
+    count += 1;
+  }
+  const evening = pastBedtime(settings);
+  if (evening) {
+    await addLateNight(dayKey(evening));
+    const when = new Date(Date.now() + 30 * 60 * 1000);
+    await lib().scheduleNotificationAsync({ content: stillUpText(when), trigger: at(when) });
+    count += 1;
+  }
+  return count;
 }
 
 // No nudges in the middle of the night

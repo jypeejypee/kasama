@@ -15,6 +15,7 @@ import { connectCalendars, type PhoneCalendar } from '@/lib/calendar';
 import { sayHi } from '@/lib/people';
 import { voiceReport } from '@/lib/voice';
 import { TimeField } from '@/components/TimePicker';
+import { sleepBlock } from '@/lib/sleep';
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const PLACES: [Place, string, string][] = [
@@ -169,7 +170,15 @@ export default function You() {
 
       <H>How often should I tap your shoulder?</H>
       <View style={styles.wrap}>{REMINDERS.map(([v, label]) => <Chip key={v} label={label} active={(s.reminders ?? 'calm') === v} onPress={() => setS({ ...s, reminders: v })} />)}</View>
-      <Muted>{REMINDERS.find(([v]) => v === (s.reminders ?? 'calm'))?.[2]} I never send anything between 10 pm and 7 am.</Muted>
+      <Muted>{REMINDERS.find(([v]) => v === (s.reminders ?? 'calm'))?.[2]} I never send anything between 10 pm and 7 am, except your bedtime nudge.</Muted>
+      {sleepBlock(s) ? (
+        <View style={styles.wrap}>
+          <Chip label="Nudge me at bedtime" active={s.bedtime !== false} onPress={() => setS({ ...s, bedtime: true })} />
+          <Chip label="No bedtime nudge" active={s.bedtime === false} onPress={() => setS({ ...s, bedtime: false })} />
+        </View>
+      ) : (
+        <Muted>Add a block called Sleep in your fixed schedule and I can nudge you at bedtime.</Muted>
+      )}
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <View style={{ flex: 1, gap: 4 }}>
           <Muted style={{ fontSize: 14 }}>Morning hello</Muted>

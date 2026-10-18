@@ -37,7 +37,7 @@ async function call<T>(action: 'dump' | 'plan' | 'chat', payload: Record<string,
 // Only what Claude needs leaves the phone: first names of your people (never their numbers), no calendar ids,
 // and only the newest part of "What I know about you" (it's resent with every message, so it adds up)
 const ABOUT_ME_CHARS = 1500;
-const forCloud = ({ people, calendarIds: _ids, aboutMe, ...s }: Settings) => ({
+const forCloud = ({ people, calendarIds: _ids, bedtime: _bed, aboutMe, ...s }: Settings) => ({
   ...s,
   aboutMe: aboutMe ? aboutMe.slice(-ABOUT_ME_CHARS) : aboutMe,
   people: (people ?? []).map((p) => p.name),

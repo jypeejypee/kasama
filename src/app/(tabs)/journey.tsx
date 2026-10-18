@@ -4,16 +4,17 @@ import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { H, Muted, Say, Title } from '@/components/ui';
 import { Scene } from '@/components/Scene';
+import { MoodSky } from '@/components/MoodSky';
 import { FONT, useColors } from '@/lib/theme';
 import { useData } from '@/lib/useData';
 import { dropTask, updateTaskSafely } from '@/lib/actions';
-import { getIdeas, getMoods, getSettings, saveSettings } from '@/lib/storage';
+import { getIdeas, getLateNights, getMoods, getSettings, saveSettings } from '@/lib/storage';
 import { shouldInvite } from '@/lib/people';
 import { dayKey } from '@/lib/time';
 import type { Mood, Task } from '@/lib/types';
 
 const DAY = 24 * 60 * 60 * 1000;
-const MOOD = { Masaya: '#9ec29a', 'Okay lang': '#e8c9a0', Pagod: '#b8a6cc' } as const;
+const FEELINGS = ['Masaya', 'Okay lang', 'Pagod'] as const;
 
 // Proof that your week mattered: what you finished, how you felt, and what Kasama noticed
 export default function Journey() {
@@ -23,11 +24,13 @@ export default function Journey() {
   const [kindReply, setKindReply] = useState(false);
   const [moods, setMoods] = useState<Mood[]>([]);
   const [ideaCount, setIdeaCount] = useState(0);
+  const [lateNights, setLateNights] = useState<string[]>([]);
   const [now, setNow] = useState(() => Date.now());
 
   useFocusEffect(useCallback(() => {
     getMoods().then(setMoods);
     getIdeas().then((i) => setIdeaCount(i.length));
+    getLateNights().then(setLateNights);
     setNow(Date.now());
   }, []));
 
@@ -49,6 +52,8 @@ export default function Journey() {
   // The last 7 days, oldest first, from the evening check-ins
   const days = Array.from({ length: 7 }, (_, i) => new Date(now - (6 - i) * DAY));
   const moodOf = (d: Date) => moods.find((m) => m.date === dayKey(d))?.feeling;
+  // Up past bedtime often this week? Said once, kindly, with a way out that isn't guilt
+  const late = lateNights.filter((k) => days.some((d) => dayKey(d) === k)).length;
 
   // Things that have waited two weeks or more: still want them?
   const stale = tasks.filter((t) => t.status === 'todo' && now - Date.parse(t.created_at) > 14 * DAY).slice(0, 3);
@@ -90,15 +95,27 @@ export default function Journey() {
             const m = moodOf(d);
             return (
               <View key={dayKey(d)} style={{ alignItems: 'center', gap: 6 }} accessible accessibilityLabel={`${d.toLocaleDateString('en-US', { weekday: 'long' })}: ${m ?? 'no check-in'}`}>
-                <View style={[styles.dot, m ? { backgroundColor: MOOD[m] } : { borderWidth: 2, borderColor: '#d8d1c3' }]} />
+                <MoodSky feeling={m} />
                 <Text style={{ color: c.muted, fontFamily: FONT.semi, fontSize: 12 }}>{d.toLocaleDateString('en-US', { weekday: 'narrow' })}</Text>
               </View>
             );
           })}
         </View>
-        <Muted style={{ fontSize: 13 }}>
-          {Object.entries(MOOD).map(([k]) => k).join(' · ')}. Tell me each night in the check-in.
-        </Muted>
+        <View style={styles.legend}>
+          {FEELINGS.map((f) => (
+            <View key={f} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <MoodSky feeling={f} size={18} />
+              <Text style={{ color: c.muted, fontFamily: FONT.semi, fontSize: 13 }}>{f}</Text>
+            </View>
+          ))}
+        </View>
+        <Muted style={{ fontSize: 13 }}>Tell me each night in the check-in.</Muted>
+        {late >= 3 && (
+          <Say style={{ fontSize: 16 }}>
+            You were up past bedtime {late} nights this week. No judgment. If that bedtime doesn&apos;t fit your life anymore,{' '}
+            <Text accessibilityRole="link" onPress={() => router.navigate('/you')} style={{ color: c.accent, fontFamily: FONT.strong }}>move it in You</Text>.
+          </Say>
+        )}
 
         {stale.length > 0 && (
           <>
@@ -139,7 +156,7 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 24, gap: 8 },
   letter: { borderTopLeftRadius: 28, borderTopRightRadius: 24, borderBottomRightRadius: 30, borderBottomLeftRadius: 22, padding: 20, gap: 10, marginTop: 4, shadowColor: '#3b3430', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
   moods: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
-  dot: { width: 30, height: 30, borderRadius: 15 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   stale: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   small: { minHeight: 40, paddingHorizontal: 14, justifyContent: 'center', borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.85)' },
 });

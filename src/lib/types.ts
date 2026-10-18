@@ -17,6 +17,7 @@ export type Settings = {
   eveningReview: string; // "21:30"
   fixedBlocks: FixedBlock[];
   reminders?: Reminders; // default 'calm'
+  bedtime?: boolean; // nudge at bedtime from your Sleep block, default on
   place?: Place; // the calm place Kasama lives in, default 'dagat'
   welcomed?: boolean; // set after the first-open Welcome
   welcomedAt?: string; // ISO; "your people" is offered only after a week
