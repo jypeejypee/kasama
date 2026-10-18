@@ -1,24 +1,13 @@
-import { useEffect, useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FONT, useColors } from '@/lib/theme';
 import { toggleListening, useVoice } from '@/lib/voice';
+import { useKeyboardOpen } from '@/lib/keyboard';
 
 // The props Expo Router gives a custom tab bar
 type BarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
-
-// Hide the bar while the keyboard is open, so it never covers what you're typing
-function useKeyboardOpen() {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setOpen(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setOpen(false));
-    return () => { show.remove(); hide.remove(); };
-  }, []);
-  return open;
-}
 
 const ICONS: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
   index: { label: 'Home', icon: 'home-outline' },

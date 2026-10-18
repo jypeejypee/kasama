@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, FlatList, KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Chip, DemoBadge, Muted, Say, Title } from '@/components/ui';
+import { DemoBadge, Say, Title } from '@/components/ui';
 import { Scene, TINTS, Vessel } from '@/components/Scene';
 import { Drift } from '@/components/Motion';
 import { FONT, useColors } from '@/lib/theme';
@@ -14,9 +14,9 @@ import { addIdeas, getAlarms, getChat, getIdeas, getNotes, getSettings, getTasks
 import { rescheduleAll } from '@/lib/notifications';
 import { fmtDue } from '@/lib/time';
 import { toggleListening, useVoice, voiceTarget } from '@/lib/voice';
+import { KEYBOARD_BEHAVIOR, useKeyboardOpen } from '@/lib/keyboard';
 import type { Alarm, ChatMessage, Idea, Note, Task } from '@/lib/types';
 
-const STARTERS = ['Pagod ako, what can I skip today?', 'java activity sat, pay meralco before 20th, call mama', 'Set an alarm for 5am', 'Idea: sell my old laptop'];
 // Your messages sit like smooth stones, each one a little different
 const STONE = [[22, 22, 6, 24], [24, 20, 6, 22], [20, 24, 6, 20]];
 
@@ -34,6 +34,7 @@ export default function KasamaScreen() {
   const insets = useSafeAreaInsets();
   const { tasks, settings, setTasks } = useData();
   const voice = useVoice();
+  const typing = useKeyboardOpen(); // the bottom bar hides while typing, so the box can sit right above the keyboard
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState<'' | 'thinking' | 'sorting'>('');
@@ -125,7 +126,7 @@ export default function KasamaScreen() {
   const hour = new Date().getHours();
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.sky }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.sky }} behavior={KEYBOARD_BEHAVIOR}>
       <View>
         <Scene height={160 + insets.top} />
         <View style={[styles.head, { paddingTop: insets.top + 14 }]}>
@@ -150,10 +151,6 @@ export default function KasamaScreen() {
           <View style={{ gap: 16 }}>
             <KasamaLine>{`${hour < 12 ? 'Good morning' : hour < 18 ? 'Hey' : 'Good evening'}${name ? `, ${name}` : ''}. Talk to me, or just let it all out. Messy is fine. I'll sort it.`}</KasamaLine>
             <DemoBadge />
-            <Muted style={{ fontSize: 14 }}>You could say…</Muted>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {STARTERS.map((e) => <Chip key={e} label={e} active={false} onPress={() => send(e)} />)}
-            </View>
           </View>
         }
         ListFooterComponent={
@@ -194,7 +191,7 @@ export default function KasamaScreen() {
           );
         }}
       />
-      <View style={[styles.bar, { backgroundColor: c.ground }]}>
+      <View style={[styles.bar, { backgroundColor: c.ground, paddingBottom: typing ? 10 : 104 }]}>
         <View style={styles.box}>
           <TextInput
             ref={input}

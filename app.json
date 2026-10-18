@@ -36,10 +36,6 @@
         "android.permission.READ_CALENDAR",
         "android.permission.RECORD_AUDIO",
         "android.permission.WRITE_CALENDAR"
-      ],
-      "blockedPermissions": [
-        "android.permission.WRITE_CALENDAR",
-        "android.permission.WRITE_CALENDAR"
       ]
     },
     "web": {
@@ -67,7 +63,18 @@
           "backgroundColor": "#f6f0e4"
         }
       ],
-      "expo-speech-recognition",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Kasama listens only after you tap the mic, to turn your words into text.",
+          "speechRecognitionPermission": "Kasama turns what you say into text.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.tts",
+            "com.google.android.as"
+          ]
+        }
+      ],
       [
         "expo-calendar",
         {

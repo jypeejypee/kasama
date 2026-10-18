@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KEYBOARD_BEHAVIOR } from '@/lib/keyboard';
 import { Button, Chip, DemoBadge, H, Muted, Title } from '@/components/ui';
 import { FONT, setPlace, useColors } from '@/lib/theme';
 import { DEFAULT_SETTINGS, getSettings, getTasks, newId, saveSettings, saveTasks } from '@/lib/storage';
@@ -108,6 +109,7 @@ export default function You() {
   }
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={KEYBOARD_BEHAVIOR}>
     <ScrollView style={{ backgroundColor: c.sky }} contentContainerStyle={{ paddingTop: insets.top + 18, paddingHorizontal: 24, paddingBottom: 130, gap: 10 }} keyboardShouldPersistTaps="handled">
       <Title size={24}>You</Title>
       <Muted>Make me yours. Change anything, anytime. I&apos;ll learn the rest as we talk.</Muted>
@@ -242,6 +244,7 @@ export default function You() {
       <Muted>{DEMO ? 'Everything stays on this phone.' : 'Your tasks and notes are saved on this phone. What you send me goes to the Kasama backend and Claude to get an answer.'}</Muted>
       <Button title="Clear finished tasks" variant="link" onPress={clearDone} />
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

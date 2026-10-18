@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KEYBOARD_BEHAVIOR } from '@/lib/keyboard';
 import { Title } from '@/components/ui';
 import { TodoList } from '@/components/TodoList';
 import { IdeaList } from '@/components/IdeaList';
@@ -16,6 +17,7 @@ export default function Things() {
   const open = tasks.filter((t) => t.status === 'todo').length;
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={KEYBOARD_BEHAVIOR}>
     <ScrollView style={{ backgroundColor: c.ground }} contentContainerStyle={{ paddingTop: insets.top + 18, paddingHorizontal: 24, paddingBottom: 130, gap: 14 }} keyboardShouldPersistTaps="handled">
       <Title size={24}>Things</Title>
       <View style={[styles.switch, { backgroundColor: 'rgba(255,255,255,0.7)' }]} accessibilityRole="tablist">
@@ -30,6 +32,7 @@ export default function Things() {
       </View>
       {tab === 'todo' ? <TodoList tasks={tasks} setTasks={setTasks} /> : <IdeaList onTasks={setTasks} />}
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, Say, Title } from '@/components/ui';
@@ -8,6 +8,7 @@ import { Breathe } from '@/components/Motion';
 import { Scene } from '@/components/Scene';
 import { FONT, setPlace, useColors } from '@/lib/theme';
 import { getSettings, saveSettings } from '@/lib/storage';
+import { KEYBOARD_BEHAVIOR } from '@/lib/keyboard';
 import type { Place } from '@/lib/types';
 
 const PLACES: [Place, string, string][] = [
@@ -35,7 +36,7 @@ export default function Welcome() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.ground }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.ground }} behavior={KEYBOARD_BEHAVIOR}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         <View>
           <Scene height={230 + insets.top} />
