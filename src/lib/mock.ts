@@ -226,3 +226,17 @@ export async function mockChat(message: string, tasks: Task[]): Promise<ChatResu
 
   return { ...none, reply: "I'm in demo mode, so I only understand simple things for now: add or remind, done, drop, move, ideas, \"remember …\" and \"what's next\". Once my backend is connected I'll understand everything." };
 }
+
+// Clear, short commands don't need AI at all, so they cost nothing and never leave the phone.
+// Only used when the on-phone rules are sure; everything else goes to Claude.
+export async function localCommand(message: string, tasks: Task[]): Promise<ChatResult | null> {
+  const t = message.trim();
+  const short = t.split(/\s+/).length <= 8;
+  const sure =
+    /^\s*idea\s*:/i.test(t) ||
+    (/\b(alarm|wake me|gisingin)\b/i.test(t) && /\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(t)) ||
+    (short && /\b(done|finished|tapos na|natapos|drop|cancel|wag na|huwag na)\b/i.test(t));
+  if (!sure) return null;
+  const r = await mockChat(t, tasks);
+  return r.actions.length || r.ideas.length || r.alarms.length ? r : null;
+}

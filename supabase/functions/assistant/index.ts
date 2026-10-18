@@ -11,11 +11,15 @@ import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
 const client = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
+// Two models to save credit: the careful one for planning and heavy moments, the light one (about 20x cheaper) for everyday messages
 const MODEL = Deno.env.get('CLAUDE_MODEL') ?? 'claude-sonnet-5-5';
+const LIGHT_MODEL = Deno.env.get('CLAUDE_LIGHT_MODEL') ?? 'claude-haiku-5-5';
+// Feelings, stress or anything that may be serious always gets the careful model
+const HEAVY = /\b(pagod|tired|exhausted|sad|lungkot|malungkot|iyak|cry|crying|stress|stressed|anxious|anxiety|kaba|takot|scared|afraid|lonely|alone|mag-isa|depress|hopeless|worthless|overwhelm|panic|hurt|sakit|ayoko na|give up|suko|die|mamatay|patay|suicide|kill|self.?harm|wala nang|di ko na kaya|hindi ko na kaya|help me|tulong)/i;
 // Supabase gives every Edge Function these two automatically
 const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } });
-const DAILY_LIMIT = Number(Deno.env.get('DAILY_LIMIT') ?? 60);
-const GLOBAL_DAILY_LIMIT = Number(Deno.env.get('GLOBAL_DAILY_LIMIT') ?? 1000);
+const DAILY_LIMIT = Number(Deno.env.get('DAILY_LIMIT') ?? 30);
+const GLOBAL_DAILY_LIMIT = Number(Deno.env.get('GLOBAL_DAILY_LIMIT') ?? 200);
 // These models can hand a declined request to a fallback model inside the same call
 const FALLBACK_MODELS = ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1'];
 
@@ -79,10 +83,11 @@ const scheduleText = (s: Settings) => (s?.fixedBlocks ?? []).map((b) => `- ${b.l
 const aboutText = (s: Settings) => (s?.aboutMe?.trim() ? `\n\nWhat they told you about themselves (follow it):\n${s.aboutMe.trim().slice(-4000)}` : '');
 
 // Structured outputs: Claude's reply is guaranteed to match the JSON schema
-async function askForJson<T>(prompt: string, schema: Record<string, unknown>, opts: { effort: Effort; settings: Settings; history?: Anthropic.Beta.BetaMessageParam[] }): Promise<T> {
-  const useFallback = FALLBACK_MODELS.includes(MODEL);
+async function askForJson<T>(prompt: string, schema: Record<string, unknown>, opts: { effort: Effort; settings: Settings; history?: Anthropic.Beta.BetaMessageParam[]; light?: boolean }): Promise<T> {
+  const model = opts.light ? LIGHT_MODEL : MODEL;
+  const useFallback = FALLBACK_MODELS.includes(model);
   const res = await client.beta.messages.create({
-    model: MODEL,
+    model,
     // Caps the cost of a single request; Kasama's answers are short, so this leaves plenty of room
     max_tokens: opts.effort === 'low' ? 4000 : 8000,
     system: persona(opts.settings) + aboutText(opts.settings),
@@ -120,7 +125,7 @@ function dump(body: { raw: string; now: string; offset: string; settings: Settin
       'Estimate duration in minutes. Ideas, plans for someday, feelings and loose thoughts go in ideas (short, one per item), not tasks. ' +
       'In heads_up, warn about deadlines that clash with fixed blocks or look unrealistic.',
     obj({ summary: str, tasks: { type: 'array', items: TASK_SCHEMA }, ideas: strList, heads_up: strList }),
-    { effort: 'medium', settings: body.settings },
+    { effort: 'medium', settings: body.settings, light: !HEAVY.test(String(body.raw)) },
   );
 }
 
@@ -165,7 +170,8 @@ function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; no
       remember: strList,
       alarms: { type: 'array', items: obj({ at: str, label: str }) },
     }),
-    { effort: 'low', settings: body.settings, history },
+    // Everyday chat uses the light model; feelings in this message or the last few go to the careful one
+    { effort: 'low', settings: body.settings, history, light: !HEAVY.test([body.message, ...(body.history ?? []).slice(-4).map((m) => m.text)].join(' ')) },
   );
 }
 

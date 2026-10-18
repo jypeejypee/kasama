@@ -1,5 +1,5 @@
 import { describeNow } from './time';
-import { mockChat, mockDump, mockPlan } from './mock';
+import { localCommand, mockChat, mockDump, mockPlan } from './mock';
 import { accessToken, forgetSession } from './session';
 import { busyAsBlocks, busyToday } from './calendar';
 import type { ChatMessage, ChatResult, DayPlan, DumpResult, Settings, Task } from './types';
@@ -49,7 +49,9 @@ export async function planDay(tasks: Task[], settings: Settings) {
 
 const openTasks = (tasks: Task[]) => tasks.filter((t) => t.status === 'todo').map((t) => ({ id: t.id, title: t.title, due_at: t.due_at, minutes: t.duration_min, priority: t.priority, repeat: t.repeat ?? null, planned: t.scheduled_start }));
 
-export function chat(message: string, history: ChatMessage[], tasks: Task[], settings: Settings) {
+export async function chat(message: string, history: ChatMessage[], tasks: Task[], settings: Settings) {
   if (DEMO) return mockChat(message, tasks);
+  const local = await localCommand(message, tasks);
+  if (local) return local;
   return call<ChatResult>('chat', { message, history: history.slice(-12).map((m) => ({ role: m.role, text: m.text })), tasks: openTasks(tasks), settings: forCloud(settings) });
 }
