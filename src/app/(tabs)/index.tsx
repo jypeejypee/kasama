@@ -1,37 +1,64 @@
 import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Button, Card, DemoBadge, H, Muted } from '@/components/ui';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button, DemoBadge, H, Muted, Say, Title } from '@/components/ui';
+import { Scene } from '@/components/Scene';
 import { TaskRow } from '@/components/TaskRow';
-import { useColors } from '@/lib/theme';
+import { CheckIn } from '@/components/CheckIn';
+import { FONT, useColors } from '@/lib/theme';
 import { useData } from '@/lib/useData';
-import { endOfDay, isToday } from '@/lib/time';
+import { endOfDay, fmtDue, fmtTime, isToday, parseHHMM } from '@/lib/time';
 import { planDay } from '@/lib/api';
 import { applyPlan, describeMoves, dropTask, isMissed, moveToTomorrow, toggleTask } from '@/lib/actions';
+import { toggleListening } from '@/lib/voice';
+import type { Task } from '@/lib/types';
 
-export default function Today() {
+const rank = { high: 0, medium: 1, low: 2 } as const;
+
+// Home changes with your day: a short path in the morning, "what's next" in the afternoon,
+// and at night it becomes the evening check-in.
+function modeFor(now: Date, eveningReview: string): 'morning' | 'afternoon' | 'night' {
+  const { hour, minute } = parseHHMM(eveningReview);
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  if (minutes >= hour * 60 + minute - 30 || now.getHours() < 4) return 'night';
+  return now.getHours() < 12 ? 'morning' : 'afternoon';
+}
+
+export default function Home() {
   const c = useColors();
+  const insets = useSafeAreaInsets();
   const { tasks, settings, setTasks } = useData();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [moves, setMoves] = useState<string[]>([]);
+  const [showDay, setShowDay] = useState(false);
+
+  const now = new Date();
+  const mode = modeFor(now, settings.eveningReview || '21:30');
+  if (mode === 'night' && !showDay) return <CheckIn tasks={tasks} settings={settings} setTasks={setTasks} onSeeDay={() => setShowDay(true)} />;
 
   const open = tasks.filter((t) => t.status === 'todo');
   const missed = open.filter((t) => isMissed(t));
   const planned = open.filter((t) => isToday(t.scheduled_start) && !missed.includes(t)).sort((a, b) => (a.scheduled_start ?? '').localeCompare(b.scheduled_start ?? ''));
   const due = open.filter((t) => !planned.includes(t) && !missed.includes(t) && t.due_at && new Date(t.due_at) <= endOfDay());
-  const rest = open.filter((t) => !planned.includes(t) && !missed.includes(t) && !due.includes(t));
+  const others = open.filter((t) => !planned.includes(t) && !missed.includes(t) && !due.includes(t)).sort((a, b) => rank[a.priority] - rank[b.priority]);
+  // Never more than three things on today's path. The rest waits in Things.
+  const path: Task[] = [...planned, ...due, ...others].slice(0, 3);
+  const waiting = open.length - missed.length - path.length;
   const doneToday = tasks.filter((t) => t.status === 'done' && isToday(t.done_at));
+  const soon = open.find((t) => t.due_at && new Date(t.due_at) > endOfDay() && new Date(t.due_at).getTime() - now.getTime() < 2 * 24 * 60 * 60 * 1000);
+  const next = planned.find((t) => new Date(t.scheduled_start ?? 0) >= now) ?? path[0];
+  const name = settings.name?.trim();
 
   async function plan() {
-    if (open.length === 0) return setMessage('No open tasks yet. Add a brain dump first.');
+    if (open.length === 0) return setMessage('Nothing to plan yet. Tell me what is on your mind first.');
     setBusy(true);
     try {
       const result = await planDay(tasks, settings);
-      const next = await applyPlan(result);
-      // Tell you what changed for the tasks you missed, like an assistant would
-      setMoves(describeMoves(missed, next));
-      setTasks(next);
+      const nextTasks = await applyPlan(result);
+      setMoves(describeMoves(missed, nextTasks)); // say what changed, like a friend would
+      setTasks(nextTasks);
       setMessage(result.message);
     } catch (e) {
       setMessage((e as Error).message);
@@ -44,45 +71,79 @@ export default function Today() {
     setTasks(await moveToTomorrow(missed.map((t) => t.id)));
     setMoves(missed.map((t) => `Moved ${t.title} to tomorrow`));
   }
+  const toggle = async (t: Task) => setTasks(await toggleTask(t));
+  const drop = async (t: Task) => setTasks(await dropTask(t));
+  const talk = () => { router.navigate('/kasama'); setTimeout(toggleListening, 350); };
 
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const hello = mode === 'morning' ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
+  const line = open.length === 0
+    ? 'Your day is wide open. Nothing to carry yet.'
+    : doneToday.length > 0
+      ? `You've already finished ${doneToday.length} thing${doneToday.length === 1 ? '' : 's'} today. I saw that.`
+      : mode === 'morning' ? "Today's path is short:" : "Here's what's next.";
+
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
-      <Card>
-        <Text style={{ color: c.text, fontSize: 22, fontWeight: '800' }}>{today}</Text>
-        <Muted>{open.length} open · {doneToday.length} done today</Muted>
+    <ScrollView style={{ backgroundColor: c.ground }} contentContainerStyle={{ paddingBottom: 130 }}>
+      <View>
+        <Scene height={240 + insets.top} time={mode === 'morning' ? 'dawn' : 'day'} />
+        <View style={[styles.over, { paddingTop: insets.top + 18 }]}>
+          <Text style={{ color: c.muted, fontSize: 15, fontFamily: FONT.strong }}>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+          <Title size={28} style={{ marginTop: 14 }}>{hello}{name ? `, ${name}` : ''}.</Title>
+          <Say style={{ marginTop: 8, maxWidth: 300 }}>{line}</Say>
+        </View>
+      </View>
+
+      <View style={styles.body}>
         <DemoBadge />
-        <Button title="Plan the rest of my day" onPress={plan} busy={busy} />
-        {!!message && <Muted>{message}</Muted>}
-        {moves.map((m) => <Text key={m} style={{ color: c.accent, fontWeight: '600' }}>{m}</Text>)}
-        <Button title="Evening check-in" variant="secondary" onPress={() => router.push('/check-in')} />
-      </Card>
+        {!!message && <Say>{message}</Say>}
+        {moves.map((m) => <Text key={m} style={{ color: c.accent, fontFamily: FONT.strong, fontSize: 15 }}>✓ {m}</Text>)}
 
-      {missed.length > 0 && (
-        <Card style={{ borderColor: c.high }}>
-          <Text style={{ color: c.text, fontSize: 17, fontWeight: '700' }}>
-            {missed.length === 1 ? 'You missed 1 planned task' : `You missed ${missed.length} planned tasks`}
+        {missed.length > 0 && (
+          <View style={styles.soft}>
+            <Title size={18}>{missed.length === 1 ? 'One thing slipped by' : `${missed.length} things slipped by`}</Title>
+            <Muted>No problem. I can fit {missed.length === 1 ? 'it' : 'them'} into the rest of today, or move {missed.length === 1 ? 'it' : 'them'} to tomorrow.</Muted>
+            {missed.map((t) => <TaskRow key={t.id} task={t} showSlot onToggle={() => toggle(t)} onDrop={() => drop(t)} />)}
+            <Button title="Fix my day" onPress={plan} busy={busy} />
+            <Button title="Move to tomorrow" variant="link" onPress={missedToTomorrow} />
+          </View>
+        )}
+
+        {mode === 'afternoon' && next && (
+          <View style={[styles.soft, { backgroundColor: c.band }]}>
+            <Text style={{ color: c.accent, fontFamily: FONT.strong, fontSize: 14 }}>NEXT{next.scheduled_start ? ` · ${fmtTime(next.scheduled_start)}` : next.due_at ? ` · by ${fmtDue(next.due_at)}` : ''}</Text>
+            <Title size={22}>{next.title}</Title>
+            <Button title="Done" onPress={() => toggle(next)} />
+          </View>
+        )}
+
+        {path.filter((t) => mode !== 'afternoon' || t !== next).length > 0 && <H>{mode === 'morning' ? "Today's path" : 'After that'}</H>}
+        {path.filter((t) => mode !== 'afternoon' || t !== next).map((t) => (
+          <TaskRow key={t.id} task={t} showSlot={!!t.scheduled_start} onToggle={() => toggle(t)} onDrop={() => drop(t)} />
+        ))}
+        {waiting > 0 && (
+          <Text accessibilityRole="link" onPress={() => router.navigate('/things')} style={{ color: c.accent, fontFamily: FONT.strong, fontSize: 15, paddingVertical: 8 }}>
+            + {waiting} more waiting in Things
           </Text>
-          <Muted>No problem. I can fit {missed.length === 1 ? 'it' : 'them'} into the rest of today, or move {missed.length === 1 ? 'it' : 'them'} to tomorrow.</Muted>
-          {missed.map((t) => <TaskRow key={t.id} task={t} showSlot onToggle={async () => setTasks(await toggleTask(t))} onDrop={async () => setTasks(await dropTask(t))} />)}
-          <Button title="Fix my day" onPress={plan} busy={busy} />
-          <Button title="Move to tomorrow" variant="secondary" onPress={missedToTomorrow} />
-        </Card>
-      )}
+        )}
+        {soon && <Muted style={{ marginTop: 6 }}>Heads up: {soon.title} is due {fmtDue(soon.due_at)}.</Muted>}
 
-      <H>Planned for today</H>
-      {planned.length === 0 && <Muted>Nothing planned yet. Tap the button above.</Muted>}
-      {planned.map((t) => <TaskRow key={t.id} task={t} showSlot onToggle={async () => setTasks(await toggleTask(t))} onDrop={async () => setTasks(await dropTask(t))} />)}
+        {doneToday.length > 0 && <H>Done today</H>}
+        {doneToday.map((t) => <TaskRow key={t.id} task={t} onToggle={() => toggle(t)} />)}
 
-      {due.length > 0 && <H>Due today or overdue</H>}
-      {due.map((t) => <TaskRow key={t.id} task={t} onToggle={async () => setTasks(await toggleTask(t))} onDrop={async () => setTasks(await dropTask(t))} />)}
-
-      {rest.length > 0 && <H>Other open tasks</H>}
-      {rest.slice(0, 10).map((t) => <TaskRow key={t.id} task={t} onToggle={async () => setTasks(await toggleTask(t))} onDrop={async () => setTasks(await dropTask(t))} />)}
-
-      {doneToday.length > 0 && <H>Done today</H>}
-      {doneToday.map((t) => <TaskRow key={t.id} task={t} onToggle={async () => setTasks(await toggleTask(t))} />)}
-      <View style={{ height: 24 }} />
+        <View style={{ height: 12 }} />
+        {open.length === 0 ? (
+          <Button title="Tell me what's on your mind" onPress={talk} />
+        ) : (
+          <Button title={mode === 'morning' ? 'Plan my day' : 'Plan the rest of my day'} onPress={plan} busy={busy} />
+        )}
+        {mode === 'night' && <Button title="Back to tonight's check-in" variant="link" onPress={() => setShowDay(false)} />}
+      </View>
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  over: { position: 'absolute', left: 0, right: 0, top: 0, paddingHorizontal: 24 },
+  body: { paddingHorizontal: 24, gap: 6 },
+  soft: { borderRadius: 26, padding: 18, gap: 8, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.75)' },
+});

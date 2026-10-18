@@ -31,3 +31,6 @@ export const parseHHMM = (s: string) => {
   return { hour: h, minute: m };
 };
 export const validHHMM = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+
+// "2026-10-18" in the phone's own time zone (toISOString would use UTC and shift late nights)
+export const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ChatMessage, Idea, Note, Settings, Task } from './types';
+import { dayKey } from './time';
+import type { Alarm, ChatMessage, Idea, Mood, Note, Settings, Task } from './types';
 
 // Everything is saved on your phone. Simple, private and works offline.
 // (Later practice idea: sync to Supabase so it also shows on your laptop.)
-const KEYS = { tasks: 'kasama.tasks', notes: 'kasama.notes', settings: 'kasama.settings', ideas: 'kasama.ideas', chat: 'kasama.chat' };
+const KEYS = { tasks: 'kasama.tasks', notes: 'kasama.notes', settings: 'kasama.settings', ideas: 'kasama.ideas', chat: 'kasama.chat', alarms: 'kasama.alarms', moods: 'kasama.moods' };
 
 export const DEFAULT_SETTINGS: Settings = {
   morningDigest: '07:00',
@@ -37,6 +38,17 @@ export const getIdeas = () => read<Idea[]>(KEYS.ideas, []);
 export const saveIdeas = (ideas: Idea[]) => write(KEYS.ideas, ideas);
 export const getChat = () => read<ChatMessage[]>(KEYS.chat, []);
 export const saveChat = (messages: ChatMessage[]) => write(KEYS.chat, messages.slice(-60));
+// Alarm reminders Kasama rings itself (iPhone, or alarms more than a day away). Past ones are dropped.
+export const getAlarms = async () => (await read<Alarm[]>(KEYS.alarms, [])).filter((a) => Date.parse(a.at) > Date.now());
+export const saveAlarms = (alarms: Alarm[]) => write(KEYS.alarms, alarms);
+
+// How each evening felt, from the check-in. One per day; Journey shows them as dots.
+export const getMoods = () => read<Mood[]>(KEYS.moods, []);
+export async function saveMood(feeling: Mood['feeling']) {
+  const date = dayKey();
+  const moods = (await getMoods()).filter((m) => m.date !== date);
+  await write(KEYS.moods, [...moods, { date, feeling }].slice(-60));
+}
 
 // Newest first. Skips ideas you already have.
 export async function addIdeas(texts: string[], source: Idea['source']) {

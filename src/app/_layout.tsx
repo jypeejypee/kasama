@@ -2,37 +2,48 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import * as Notifications from 'expo-notifications';
-import { rescheduleAll, setupNotifications } from '@/lib/notifications';
-import { useColors } from '@/lib/theme';
+import * as SplashScreen from 'expo-splash-screen';
+import { Nunito_700Bold, Nunito_800ExtraBold, useFonts } from '@expo-google-fonts/nunito';
+import { NunitoSans_400Regular, NunitoSans_600SemiBold, NunitoSans_700Bold } from '@expo-google-fonts/nunito-sans';
+import { onReminderTap, rescheduleAll, setupNotifications } from '@/lib/notifications';
+import { getSettings } from '@/lib/storage';
+import { setPlace, useColors } from '@/lib/theme';
 
-// Tapping a reminder opens the screen it points to (for example the evening check-in)
-function openFrom(response: Notifications.NotificationResponse | null) {
-  const url = response?.notification.request.content.data?.url;
-  if (typeof url === 'string') router.push(url as never);
-}
+// Keep the splash up until Kasama's fonts are ready, so text never jumps
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const c = useColors();
-  useEffect(() => {
-    // Ask for permission once, then refresh reminders every time the app comes to the front
-    setupNotifications().then((ok) => { if (ok) rescheduleAll(); });
-    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') rescheduleAll(); });
+  const [loaded, error] = useFonts({ Nunito_700Bold, Nunito_800ExtraBold, NunitoSans_400Regular, NunitoSans_600SemiBold, NunitoSans_700Bold });
 
-    // The app may have been opened by tapping a notification while it was closed
-    openFrom(Notifications.getLastNotificationResponse());
-    Notifications.clearLastNotificationResponse();
-    const tap = Notifications.addNotificationResponseReceivedListener(openFrom);
-    return () => { sub.remove(); tap.remove(); };
+  useEffect(() => {
+    if (loaded || error) SplashScreen.hideAsync().catch(() => {});
+  }, [loaded, error]);
+
+  useEffect(() => {
+    getSettings().then((s) => setPlace(s.place));
+    // Ask for permission once, then refresh reminders every time the app comes to the front
+    setupNotifications().then((ok) => (ok ? rescheduleAll() : undefined));
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') rescheduleAll(); });
+    const stopTaps = onReminderTap((url) => router.push(url as never));
+    return () => { sub.remove(); stopTaps(); };
   }, []);
+
+  // First open: say hi before anything else (after the screens are ready to navigate)
+  const ready = loaded || !!error;
+  useEffect(() => {
+    if (!ready) return;
+    getSettings().then((s) => { if (!s.welcomed) router.replace('/welcome'); });
+  }, [ready]);
+
+  if (!ready) return null;
 
   return (
     <>
-      <StatusBar style="auto" />
-      <Stack screenOptions={{ headerStyle: { backgroundColor: c.card }, headerTintColor: c.text, contentStyle: { backgroundColor: c.bg } }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="check-in" options={{ title: 'Evening check-in', presentation: 'modal' }} />
-        <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+      <StatusBar style="dark" />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.sky } }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="welcome" options={{ gestureEnabled: false }} />
       </Stack>
     </>
   );

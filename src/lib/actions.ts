@@ -1,5 +1,6 @@
 import { addIdeas, getTasks, newId, remember, saveTasks, updateTask } from './storage';
 import { rescheduleAll } from './notifications';
+import { setAlarms } from './alarm';
 import { endOfDay, fmtDue, fmtTime } from './time';
 import type { ChatResult, DayPlan, ProposedTask, Repeat, Task } from './types';
 
@@ -131,6 +132,7 @@ export async function applyChatResult(r: ChatResult) {
     await remember(r.remember);
     changes.push(`I'll remember: ${r.remember.join('; ')}`);
   }
+  if (r.alarms?.length) changes.push(...(await setAlarms(r.alarms)));
   return { tasks, changes };
 }
 
@@ -144,4 +146,11 @@ function toggleTaskIn(tasks: Task[], t: Task) {
 
 export async function makeTaskFromIdea(text: string) {
   return addTasks([{ title: text, notes: null, due_at: null, duration_min: 30, priority: 'medium', repeat: null }]);
+}
+
+// Change one task and keep reminders in step with it
+export async function updateTaskSafely(id: string, patch: Partial<Task>) {
+  const next = await updateTask(id, patch);
+  await rescheduleAll();
+  return next;
 }

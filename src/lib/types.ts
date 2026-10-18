@@ -1,10 +1,26 @@
 export type FixedBlock = { id: string; label: string; days: number[]; start: string; end: string };
 
+// How Kasama talks to you: one size does not fit all
+export type Encourage = 'quiet' | 'gentle' | 'cheer';
+export type Support = 'ask' | 'listen' | 'advise';
+export type Faith = 'none' | 'christian' | 'spiritual' | 'other';
+export type Place = 'dagat' | 'bundok' | 'palayan';
+// quiet: morning and night only · calm: plus task starts and deadlines at risk · all: every reminder
+export type Reminders = 'quiet' | 'calm' | 'all';
+
 export type Settings = {
   morningDigest: string; // "07:00"
   eveningReview: string; // "21:30"
   fixedBlocks: FixedBlock[];
+  reminders?: Reminders; // default 'calm'
+  place?: Place; // the calm place Kasama lives in, default 'dagat'
+  welcomed?: boolean; // set after the first-open Welcome
   aboutMe?: string; // what Kasama remembers about you, sent with every request
+  name?: string;
+  encourage?: Encourage;
+  support?: Support;
+  faith?: Faith;
+  faithOther?: string; // their own words when faith is 'other'
 };
 
 export type Priority = 'high' | 'medium' | 'low';
@@ -35,7 +51,11 @@ export type Idea = { id: string; text: string; source: 'dump' | 'chat' | 'manual
 export type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; changes?: string[]; created_at: string };
 
 export type ChatAction = { type: 'add' | 'done' | 'drop' | 'move'; task_id: string | null; task: ProposedTask | null; due_at: string | null };
-export type ChatResult = { reply: string; actions: ChatAction[]; ideas: string[]; remember: string[] };
+export type Mood = { date: string; feeling: 'Masaya' | 'Okay lang' | 'Pagod' }; // date: YYYY-MM-DD
+
+export type AlarmRequest = { at: string; label: string }; // at: ISO with offset
+export type Alarm = AlarmRequest & { id: string };
+export type ChatResult = { reply: string; actions: ChatAction[]; ideas: string[]; remember: string[]; alarms: AlarmRequest[] };
 
 export type DumpResult = { summary: string; tasks: ProposedTask[]; ideas: string[]; heads_up: string[] };
 

@@ -1,8 +1,10 @@
 # Kasama (phone app)
 
-Your personal assistant and companion on your phone. Chat with Kasama like a person, or brain-dump whatever is on your mind; Claude summarizes it, pulls out tasks with real dates, warns you about clashes with work and class, and plans the rest of your day around your fixed schedule. It collects your ideas, remembers things about you, and fixes your day when you miss something. The phone then reminds you: when each task starts, an hour before deadlines, a morning focus and an evening check-in.
+A calm personal assistant and companion on your phone. Talk to Kasama (type or speak), or let out everything on your mind; Claude sorts it into tasks with real dates and ideas, warns you about clashes with work and class, and plans your day around your fixed schedule. It remembers things about you, fixes your day when you miss something, reminds you only as much as you want, and closes each day with a gentle evening check-in.
 
-**Stack:** React Native · Expo SDK 57 · Expo Router (tabs) · TypeScript · expo-notifications (local) · AsyncStorage · Supabase Edge Function → Claude API
+Kasama lives in a calm place you choose: **Dagat** (by the sea), **Bundok** (the mountains) or **Palayan** (the rice fields). Its logo is two stones side by side: the big one is Kasama, the small one is you.
+
+**Stack:** React Native · Expo SDK 57 · Expo Router (tabs) · TypeScript · expo-notifications (local) · expo-speech-recognition · react-native-svg · AsyncStorage · Supabase Edge Function → Claude API
 
 If you know React, you already know most of this. Instead of `<div>` and `<p>` you use `<View>` and `<Text>`, and styles are JavaScript objects.
 
@@ -37,24 +39,26 @@ kasama/
 ├─ supabase/functions/assistant/index.ts   the Claude backend (Deno)
 └─ src/
    ├─ app/                     screens (Expo Router: every file is a screen)
-   │  ├─ _layout.tsx           asks for notification permission, refreshes reminders, opens tapped notifications
-   │  ├─ check-in.tsx          Evening check-in: done / tomorrow / drop
-   │  ├─ settings.tsx          About me, reminder times, fixed schedule, test notification (gear icon)
+   │  ├─ _layout.tsx           fonts, splash, first-open Welcome, reminders, opens tapped notifications
+   │  ├─ welcome.tsx           first open: your name and your place
    │  └─ (tabs)/
-   │     ├─ _layout.tsx        bottom tabs
-   │     ├─ index.tsx          Today + "Plan the rest of my day" + missed tasks
-   │     ├─ chat.tsx           Chat with Kasama (it changes your tasks for you)
-   │     ├─ dump.tsx           Brain dump → review → save tasks
-   │     ├─ tasks.tsx          All tasks + quick add (with repeat)
-   │     └─ ideas.tsx          All your ideas in one place
-   ├─ components/              TaskRow, Card, Button, Chip
+   │     ├─ _layout.tsx        floating bottom bar; the middle button talks to Kasama
+   │     ├─ index.tsx          Home: morning path, afternoon "next", night check-in
+   │     ├─ things.tsx         Things: To do + Ideas
+   │     ├─ kasama.tsx         Kasama: talk or let it all out (sorted, with Undo)
+   │     ├─ journey.tsx        Journey: your week, moods, patterns, cleanup
+   │     └─ you.tsx            You: place, name, how Kasama talks, reminders, schedule
+   ├─ components/              Logo, Scene (sea/mountains/rice fields), CheckIn, TaskRow, TodoList, IdeaList, ui
    └─ lib/
-      ├─ types.ts              Task, Settings, DumpResult, DayPlan
+      ├─ types.ts              Task, Settings, Mood, DumpResult, DayPlan
       ├─ storage.ts            save/load on the phone + your default schedule
-      ├─ notifications.ts      setupNotifications(), rescheduleAll(), test
+      ├─ notifications.ts      reminders (loaded safely, so Expo Go can't crash)
+      ├─ voice.ts              speech to text for the mic (installed app only)
+      ├─ alarm.ts              opens the Clock app for alarms (Android)
       ├─ actions.ts            add / done / drop / apply plan (always re-schedules reminders)
-      ├─ api.ts                calls the Edge Function
-      ├─ time.ts, theme.ts, useData.ts
+      ├─ api.ts, mock.ts       calls the Edge Function, or simple on-phone rules in demo mode
+      ├─ theme.ts              the three places, fonts, night colors
+      ├─ time.ts, useData.ts
 ```
 
 ---
@@ -121,15 +125,17 @@ A QR code appears in the terminal. Your phone and laptop must be on the **same W
 - **Android:** open Expo Go → **Scan QR code**.
 - **iPhone:** open the Camera app → scan → tap the Expo Go link.
 
-Allow notifications when asked, then:
+On first open, the Welcome asks your name and your place. Then:
 
-1. **Settings (gear icon, top right) → Send a test notification**, and lock your phone. It should appear in about 5 seconds.
-2. **Brain dump:** "submit java activity on saturday 5pm, apply to seansoft and stay finance this week, pay meralco before the 20th, buy rice" → **Sort my thoughts** → **Save tasks**.
-3. **Today → Plan the rest of my day.** Each planned block will notify you when it starts.
+1. **Middle button → type** "submit java activity on saturday 5pm, pay meralco before the 20th, buy rice" → send. Kasama sorts it into tasks (tap **Undo** if it got something wrong).
+2. **Home → Plan my day.** Each planned block will notify you when it starts.
+3. **You → Send a test notification**, and lock your phone.
 
-When you save a file in VS Code, the app reloads on your phone instantly.
+When you save a file in VS Code, the app reloads on your phone instantly. After adding or removing screens, restart with `npx expo start --clear`.
 
-> If the QR code won't connect (office or school Wi-Fi often blocks it), run `npx expo start --tunnel`.
+> **Expo Go limits:** the **mic** (speech to text), **reminders** and the **Clock alarm** need the installed app (step 6). In Expo Go they quietly fall back instead of crashing: the mic opens your keyboard, and reminders are skipped.
+>
+> If the QR code won't connect (office or school Wi-Fi often blocks it), run `npx expo start --tunnel`, or type the `exp://…` address into Expo Go → **Enter URL manually**.
 
 ### 6. Install it for real (no Expo Go needed)
 
@@ -137,8 +143,8 @@ When you save a file in VS Code, the app reloads on your phone instantly.
 
 ```bash
 npx eas-cli@latest login            # your expo.dev account
-npx eas-cli@latest build:configure  # once; accept the defaults
-npm run build:apk                   # builds in the cloud, about 10–20 min
+npx eas-cli@latest init             # once: links this project to your account
+npm run build:apk                   # builds in the cloud, about 10–30 min
 ```
 
 **Before the first build:** the cloud build does not see your `.env` file, because it's git-ignored. Add the same two values on expo.dev → your project → **Environment variables** → environment **preview** (visibility "Plain text"): `EXPO_PUBLIC_ASSISTANT_URL` and `EXPO_PUBLIC_APP_SECRET`. Without them, the installed app can't reach Claude.
@@ -151,23 +157,22 @@ When the build finishes, open the link it prints on your phone → download the 
 
 ## Daily use
 
-- **Talk to Kasama:** the **Kasama** tab. "Pagod ako, what can I skip today?", "Remind me to call Mama tomorrow 7pm", "Move the Java activity to Sunday". It answers and changes your tasks. Under its reply you see exactly what it did.
-- **Ideas:** say "Idea: …" in chat, write it in the **Ideas** tab, or just brain-dump. Every idea is collected in the Ideas tab, where you can search it or turn it into a task.
-- **Kasama remembers you:** tell it in chat ("I don't like tasks after 10pm"), or write in **Settings (gear icon) → About me**. It uses this every time it plans or answers.
-- **Repeating tasks:** bills and weekly things. Say "every month" or "every Saturday" in chat or brain dump, or pick daily/weekly/monthly in quick add. Tick it off and the next one appears. Dropping it stops the repeat.
-- **Nudges:** if a deadline is coming and the task isn't planned, Kasama nudges you early enough to still do it (only between 7am and 10pm).
-- **Anything comes up:** Brain dump. Tap the microphone on your keyboard to talk instead of typing.
-- **Morning (7:00):** notification with your top 3 tasks.
-- **After work:** Today → **Plan the rest of my day**.
-- **Missed a planned task?** 15 minutes after its slot ends, Kasama asks "Did you finish…?" Today shows it under **You missed…**. Tap **Fix my day** and Kasama re-plans the rest of today and tells you what it moved, or tap **Move to tomorrow**.
-- **Night (9:30):** evening check-in. Tap the notification, or **Today → Evening check-in**. For each task left today, choose **Done**, **Tomorrow** or **Drop**. Moving a task to tomorrow also moves today's (or an overdue) deadline to tomorrow at the same time.
+The bottom bar: **Home · Things · (Kasama) · Journey · You**.
+
+- **Home changes with your day.** Morning: today's path, never more than 3 things. Afternoon: the one thing that's **next**. Night (30 minutes before your check-in time): Home **becomes the evening check-in**: Done, Tomorrow or Let go for what's left, and how you feel.
+- **Something comes up? Tap the middle button.** In the installed app it's already listening; just talk. Or type. Questions get answers ("Pagod ako, what can I skip today?"); messy lists get sorted into tasks and ideas ("java sat, meralco before 20th, call mama"). Every change shows **Undo**.
+- **Alarms:** "Set an alarm for 5am" opens your Clock app with it filled in (Android). Kasama may offer once when you mention something early; it never sets one you didn't say yes to.
+- **Things:** **To do** (grouped Today, This week, Later, Whenever; tap a pebble when done) and **Ideas** (old ones come back now and then for one small step).
+- **Journey:** a note from Kasama about your week, your mood dots from the check-ins, patterns ("you get the most done in the morning"), and things that waited two weeks ("Still want these?").
+- **You:** your place, your name, how Kasama talks to you (encouragement, listening or advice, faith), how often it reminds you (Quiet, Calm, Everything), your fixed schedule, and what Kasama knows about you.
+- **Repeating tasks:** say "every month" or "every Saturday", or pick it when adding. Tick it off and the next one appears.
+- **Missed a planned task?** Home shows "One thing slipped by". Tap **Fix my day** or **Move to tomorrow**.
 - Tick tasks as done. Their reminders are cancelled automatically.
-- Change work, class or sleep times in **Settings**, then **Save**.
 
 ## Good to know
 
 - Your tasks live **only on your phone**. Uninstalling the app deletes them. Syncing to Supabase is the first practice project below.
-- Brain dump and Plan my day need internet. Reminders and ticking tasks don't.
+- Talking to Kasama and Plan my day need internet (and Claude credit). Without a backend the app runs in **demo mode** with simple on-phone rules. Reminders, ticking tasks and the mic don't need internet.
 - The morning notification lists your top 3 tasks as of the last time you opened the app. Open it once in the evening to keep the next morning's list fresh.
 - **Android:** if reminders come late, set Battery → Kasama → **Unrestricted**, and allow "Alarms & reminders" if your phone asks.
 
@@ -176,8 +181,8 @@ When the build finishes, open the link it prints on your phone → download the 
 1. **Supabase sync:** save tasks to Supabase so they're backed up and visible on your laptop. Reuse the JobPilot patterns.
 2. **Date picker** for deadlines (`@react-native-community/datetimepicker`).
 3. **Snooze 15 min** button on notifications (notification categories/actions in expo-notifications).
-4. **Recurring tasks** ("every Saturday: review Java notes").
-5. **Weekly review** screen: a summary of your notes and finished tasks.
+4. **Home screen shortcut or widget** that opens Kasama already listening.
+5. **Gentle motion:** rocking boats, drifting clouds, a breathing logo (React Native Reanimated).
 6. **Link with JobPilot:** when a job scores 80+, add "Apply to …" as a task.
 
 ## Troubleshooting

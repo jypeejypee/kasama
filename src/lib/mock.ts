@@ -177,7 +177,14 @@ export async function mockChat(message: string, tasks: Task[]): Promise<ChatResu
   await wait(600);
   const t = message.trim();
   const open = tasks.filter((x) => x.status === 'todo');
-  const none: ChatResult = { reply: '', actions: [], ideas: [], remember: [] };
+  const none: ChatResult = { reply: '', actions: [], ideas: [], remember: [], alarms: [] };
+
+  if (/\b(alarm|wake me|gisingin)\b/i.test(t)) {
+    const when = parseWhen(t);
+    if (!when) return { ...none, reply: 'Sure. What time should I set the alarm for?' };
+    if (when.getTime() <= Date.now()) when.setDate(when.getDate() + 1); // "5am" said at night means tomorrow
+    return { ...none, reply: 'Okay, setting your alarm.', alarms: [{ at: when.toISOString(), label: 'Alarm from Kasama' }] };
+  }
   const target = findTask(t, open);
 
   if (IDEA.test(t)) return { ...none, reply: 'Nice one. I saved it to your Ideas.', ideas: [cap(t.replace(IDEA, ''))] };

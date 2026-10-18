@@ -5,14 +5,14 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.jaypee.kasama"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#2f5d50",
+        "backgroundColor": "#0e1428",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -21,7 +21,8 @@
       "package": "com.jaypee.kasama",
       "permissions": [
         "SCHEDULE_EXACT_ALARM",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "com.android.alarm.permission.SET_ALARM"
       ]
     },
     "web": {
@@ -36,10 +37,27 @@
       [
         "expo-notifications",
         {
-          "color": "#2f5d50"
+          "color": "#557564"
         }
       ],
-      "expo-font"
-    ]
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#f6f0e4"
+        }
+      ],
+      "expo-speech-recognition"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b52e1ba9-27f3-4992-b177-51130606cbda"
+      }
+    },
+    "owner": "jypeejypee"
   }
 }
