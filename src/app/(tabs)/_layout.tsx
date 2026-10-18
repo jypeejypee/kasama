@@ -9,11 +9,13 @@ import { useKeyboardOpen } from '@/lib/keyboard';
 // The props Expo Router gives a custom tab bar
 type BarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 
-const ICONS: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  index: { label: 'Home', icon: 'home-outline' },
-  things: { label: 'Things', icon: 'list-outline' },
-  journey: { label: 'Journey', icon: 'leaf-outline' },
-  you: { label: 'You', icon: 'person-circle-outline' },
+// Outline icons for the other tabs, filled for the one you're on
+type Icon = keyof typeof Ionicons.glyphMap;
+const ICONS: Record<string, { label: string; icon: Icon; active: Icon }> = {
+  index: { label: 'Home', icon: 'home-outline', active: 'home' },
+  things: { label: 'Things', icon: 'list-outline', active: 'list' },
+  journey: { label: 'Journey', icon: 'leaf-outline', active: 'leaf' },
+  you: { label: 'You', icon: 'person-circle-outline', active: 'person-circle' },
 };
 
 // A floating bar, with a raised button in the middle so letting something out is always one tap away
@@ -50,11 +52,14 @@ function FloatingBar({ state, navigation }: BarProps) {
         }
         const meta = ICONS[r.name];
         if (!meta) return null;
-        const color = focused ? c.accent : '#6b7672';
+        // Where you are, at a glance: your place's color, a filled icon on a soft pebble, a bold label
+        const color = focused ? c.accent : '#646f6a';
         return (
           <Pressable key={r.key} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel={meta.label} onPress={() => go(r.name, r.key, focused)} style={styles.tab}>
-            <Ionicons name={meta.icon} size={22} color={color} />
-            <Text style={{ color, fontSize: 12, fontFamily: FONT.strong }}>{meta.label}</Text>
+            <View style={[styles.pebble, focused && { backgroundColor: c.band }]}>
+              <Ionicons name={focused ? meta.active : meta.icon} size={22} color={color} />
+            </View>
+            <Text style={{ color, fontSize: 12, fontFamily: focused ? FONT.title : FONT.semi }}>{meta.label}</Text>
           </Pressable>
         );
       })}
@@ -78,5 +83,6 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   bar: { position: 'absolute', left: 16, right: 16, height: 66, borderRadius: 33, backgroundColor: 'rgba(255,255,255,0.95)', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', shadowColor: '#28463c', shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 56 },
+  pebble: { width: 52, height: 30, alignItems: 'center', justifyContent: 'center', borderTopLeftRadius: 16, borderTopRightRadius: 13, borderBottomRightRadius: 16, borderBottomLeftRadius: 13 },
   center: { width: 60, height: 60, borderRadius: 30, marginTop: -30, alignItems: 'center', justifyContent: 'center', shadowColor: '#22372b', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
 });
