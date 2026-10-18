@@ -251,6 +251,11 @@ export default function You() {
       <Muted style={{ fontSize: 13 }}>Their numbers stay on this phone. Only first names reach me, so I can say &quot;maybe message Mia?&quot;</Muted>
 
       <H>Voice</H>
+      <Muted>What should I listen for? Filipino also catches English words, so it&apos;s best for Taglish. Talking never uses Claude credit; only what you send does.</Muted>
+      <View style={styles.wrap}>
+        <Chip label="Filipino (Taglish)" active={(s.voiceLang ?? 'fil-PH') === 'fil-PH'} onPress={() => persist({ voiceLang: 'fil-PH' })} />
+        <Chip label="English" active={s.voiceLang === 'en-US'} onPress={() => persist({ voiceLang: 'en-US' })} />
+      </View>
       <Muted>If the mic doesn&apos;t work, tap this and share a screenshot of what it says.</Muted>
       <Button title="Test my mic" variant="secondary" onPress={async () => setMicReport(await voiceReport())} />
       {micReport.map((l) => <Muted key={l} style={{ fontSize: 14 }}>· {l}</Muted>)}

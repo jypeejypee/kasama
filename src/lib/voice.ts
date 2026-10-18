@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from 'react';
 import { Platform } from 'react-native';
 import type * as SpeechLib from 'expo-speech-recognition';
+import { getSettings } from './storage';
+import type { VoiceLang } from './types';
 
 // Talk to Kasama with the big mic in the middle of the bottom bar.
 // Uses the phone's own speech engine (free, no Claude credit needed). It needs the installed app:
@@ -34,7 +36,8 @@ let kept = ''; // what was already in the box, plus everything you finished sayi
 const join = (a: string, b: string) => (a.trim() ? `${a.trim()}${/[,.!?]$/.test(a.trim()) ? '' : ','} ${b}` : b);
 
 // Filipino recognition also understands English words, so Taglish works; English is the fallback
-let lang = 'fil-PH';
+let lang: VoiceLang = 'fil-PH';
+let fellBack = false; // true when the phone had no Filipino voice and Kasama switched to English
 // Google's voice services, best first; phones differ in which one they have
 const SERVICES = ['com.google.android.tts', 'com.google.android.googlequicksearchbox', 'com.google.android.as'];
 
@@ -72,7 +75,11 @@ async function begin() {
 
 if (Speech) {
   const m = Speech.ExpoSpeechRecognitionModule;
-  m.addListener('start', () => { starting = false; set({ listening: true, note: "I'm listening… tap the mic again when you're done." }); });
+  m.addListener('start', () => {
+    starting = false;
+    const how = fellBack ? 'in English, because this phone has no Filipino voice yet' : lang === 'fil-PH' ? 'in Filipino' : 'in English';
+    set({ listening: true, note: `I'm listening ${how}… tap the mic again when you're done.` });
+  });
   m.addListener('end', () => set({ listening: false, note: state.note.startsWith("I'm listening") ? '' : state.note }));
   m.addListener('result', (e) => {
     const said = e.results[0]?.transcript?.trim();
@@ -88,6 +95,7 @@ if (Speech) {
     // This phone can't do Filipino recognition: try again in English (it still catches most Taglish)
     if (e.error === 'language-not-supported' && lang !== 'en-US') {
       lang = 'en-US';
+      fellBack = true;
       begin();
       return;
     }
@@ -134,7 +142,8 @@ export async function toggleListening() {
     return;
   }
   kept = target?.get() ?? '';
-  lang = 'fil-PH';
+  lang = (await getSettings()).voiceLang ?? 'fil-PH'; // chosen in You → Voice
+  fellBack = false;
   options = pickOptions();
   attempt = 0;
   set({ note: 'Getting ready to listen…' });
@@ -173,6 +182,27 @@ export async function voiceReport(): Promise<string[]> {
       lines.push('Phone default: unknown');
     }
     lines.push(`Android version: ${Platform.Version}`);
+  }
+  // Can this phone hear Filipino? (Android 13+ can tell us; older phones just try it)
+  if (Platform.OS === 'android') {
+    if (Number(Platform.Version) < 33) {
+      lines.push("Filipino voice: can't check on this Android version. I'll try Filipino first and switch to English if needed.");
+    } else {
+      try {
+        const have = m.getSpeechRecognitionServices();
+        const service = SERVICES.find((p) => have.includes(p));
+        const { locales, installedLocales } = await m.getSupportedLocales(service ? { androidRecognitionServicePackage: service } : {});
+        const isFil = (l: string) => /^(fil|tl)\b/i.test(l);
+        lines.push(
+          installedLocales.some(isFil) ? 'Filipino voice: supported, even offline'
+            : locales.some(isFil) ? 'Filipino voice: supported (needs internet)'
+            : locales.length ? "Filipino voice: not on this phone, so I'll listen in English"
+            : "Filipino voice: the phone didn't say. I'll try Filipino first.",
+        );
+      } catch {
+        lines.push("Filipino voice: the phone didn't say. I'll try Filipino first.");
+      }
+    }
   }
   if (state.note) lines.push(`Last voice message: ${state.note}`);
   return lines;

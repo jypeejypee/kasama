@@ -5,6 +5,8 @@ export type Encourage = 'quiet' | 'gentle' | 'cheer';
 export type Support = 'ask' | 'listen' | 'advise';
 export type Faith = 'none' | 'christian' | 'spiritual' | 'other';
 export type Place = 'dagat' | 'bundok' | 'palayan';
+// Filipino (fil-PH) also catches English words, so it's the best fit for Taglish
+export type VoiceLang = 'fil-PH' | 'en-US';
 // Someone you trust. Kasama only opens your own SMS or Messenger; it never messages them itself.
 export type Person = { id: string; name: string; how: 'sms' | 'messenger'; handle: string };
 // quiet: morning and night only · calm: plus task starts and deadlines at risk · all: every reminder
@@ -22,6 +24,7 @@ export type Settings = {
   people?: Person[]; // people you trust; Kasama nudges you to say hi
   peopleAsked?: boolean; // the gentle "is there someone you trust?" question was answered
   nudgedAt?: string; // ISO; last time Kasama suggested saying hi
+  voiceLang?: VoiceLang; // what the mic listens for, default Filipino
   aboutMe?: string; // what Kasama remembers about you, sent with every request
   name?: string;
   encourage?: Encourage;
