@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { Animated, Easing, View } from 'react-native';
 import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
 import { useColors } from '@/lib/theme';
 
@@ -34,5 +36,38 @@ export function Logo({ width = 120, gap }: { width?: number; gap?: string }) {
       <Path d={SMALL_SHADE} fill={shade} />
       <Path d={SMALL_LIGHT} fill={light} />
     </Svg>
+  );
+}
+
+// While Kasama opens: the same two stones as the splash, with their shadows slowly
+// warming and cooling, like light moving over them. It runs on the native side, so it stays smooth.
+export function StoneLoader({ onShown }: { onShown?: () => void }) {
+  const c = useColors();
+  const [, shade] = YOU[c.place];
+  const [glow] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(glow, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(glow, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [glow]);
+  const width = 184; // matches the stones on the splash screen, so the change is seamless
+  const height = (width * 170) / 200;
+  return (
+    <View onLayout={onShown} style={{ flex: 1, backgroundColor: '#f6f0e4', alignItems: 'center', justifyContent: 'center' }} accessibilityLabel="Kasama is opening">
+      <View style={{ width, height }}>
+        <Logo width={width} gap="#f6f0e4" />
+        <Animated.View pointerEvents="none" style={{ position: 'absolute', inset: 0, opacity: glow }}>
+          <Svg width={width} height={height} viewBox="0 0 200 170">
+            <Ellipse cx={104} cy={156} rx={90} ry={8} fill="#cdbfa6" opacity={0.8} />
+            <Path d={BIG_SHADE} fill="#c8b89c" />
+            <Path d={SMALL_SHADE} fill={shade} />
+            <Path d={SMALL_SHADE} fill="#2f5d55" opacity={0.18} />
+          </Svg>
+        </Animated.View>
+      </View>
+    </View>
   );
 }

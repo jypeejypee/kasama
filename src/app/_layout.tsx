@@ -9,6 +9,7 @@ import { onReminderTap, rescheduleAll, setupNotifications } from '@/lib/notifica
 import { getSettings, saveSettings } from '@/lib/storage';
 import { setPlace, useColors } from '@/lib/theme';
 import { prefetchUpdate, updateIfAvailable } from '@/lib/updates';
+import { StoneLoader } from '@/components/Logo';
 
 // Keep the splash up until Kasama's fonts are ready, so text never jumps
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -43,7 +44,8 @@ export default function RootLayout() {
     });
   }, [ready]);
 
-  if (!ready) return null;
+  // The still splash hands over to the living stones as soon as they're drawn
+  if (!ready) return <StoneLoader onShown={() => SplashScreen.hideAsync().catch(() => {})} />;
 
   return (
     <>
