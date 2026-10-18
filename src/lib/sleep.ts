@@ -28,3 +28,22 @@ export function stillUpText(when: Date) {
   if (h >= 0 && h < 5) return { title: "It's really late", body: 'Whatever is left can wait for tomorrow. Put the phone down and rest. I will remember for you.' };
   return { title: 'Still up?', body: "It's past your bedtime. Tomorrow-you will thank you for sleeping now." };
 }
+
+const hhmm = (m: number) => { const x = ((m % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
+
+// Is this a time you're normally asleep? Quiet hours follow your Sleep block (night shift included),
+// or 10 pm to 7 am if you haven't set one.
+export function asleepAt(s: Settings, d: Date) {
+  const b = sleepBlock(s);
+  const n = d.getHours() * 60 + d.getMinutes();
+  if (!b) return n >= 22 * 60 || n < 7 * 60;
+  const start = minutesOf(b.start);
+  const end = minutesOf(b.end);
+  return start > end ? n >= start || n < end : n >= start && n < end;
+}
+
+// Your hello when you wake up, and your check-in half an hour before you sleep
+export function timesFromSleep(s: Settings) {
+  const b = sleepBlock(s);
+  return b ? { morningDigest: b.end, eveningReview: hhmm(minutesOf(b.start) - 30) } : null;
+}

@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import type * as NotificationsLib from 'expo-notifications';
 import { addLateNight, getAlarms, getSettings, getTasks } from './storage';
 import { dayKey, endOfDay, fmtTime, isToday, parseHHMM } from './time';
-import { pastBedtime, sleepBlock, stillUpText } from './sleep';
+import { asleepAt, pastBedtime, sleepBlock, stillUpText } from './sleep';
 import type { Task } from './types';
 
 // Reminders are scheduled ON THE PHONE (local notifications). They fire even with no
@@ -78,7 +78,7 @@ async function scheduleEverything() {
       // Nudge early enough to still do it, unless it is already planned for later
       const plannedLater = t.scheduled_start && new Date(t.scheduled_start).getTime() > now;
       const nudge = new Date(new Date(t.due_at).getTime() - (t.duration_min + 120) * 60 * 1000);
-      if (!plannedLater && nudge.getTime() > now && nudge < hourBefore && awakeHours(nudge)) {
+      if (!plannedLater && nudge.getTime() > now && nudge < hourBefore && !asleepAt(settings, nudge)) {
         // A deadline at risk: the one daytime nudge even calm mode keeps
         items.push({ when: nudge, title: `Haven't started ${t.title}?`, body: `Due ${fmtTime(t.due_at)}. It takes about ${t.duration_min} min. Start now, or open Kasama to plan it.`, url: '/' });
       }
@@ -146,8 +146,6 @@ async function scheduleBedtime(settings: Awaited<ReturnType<typeof getSettings>>
   return count;
 }
 
-// No nudges in the middle of the night
-const awakeHours = (d: Date) => d.getHours() >= 7 && d.getHours() < 22;
 
 function checkInText(open: Task[]) {
   const left = open.filter((t) => isToday(t.scheduled_start) || (t.due_at && new Date(t.due_at) <= endOfDay())).length;

@@ -21,13 +21,15 @@ const rank = { high: 0, medium: 1, low: 2 } as const;
 // The open tasks, as one short key, to know whether the list changed since Kasama spoke
 const openKey = (list: Task[]) => list.filter((t) => t.status === 'todo').map((t) => t.id).sort().join(',');
 
-// Home changes with your day: a short path in the morning, "what's next" in the afternoon,
-// and at night it becomes the evening check-in.
-function modeFor(now: Date, eveningReview: string): 'morning' | 'afternoon' | 'night' {
-  const { hour, minute } = parseHHMM(eveningReview);
-  const minutes = now.getHours() * 60 + now.getMinutes();
-  if (minutes >= hour * 60 + minute - 30 || now.getHours() < 4) return 'night';
-  return now.getHours() < 12 ? 'morning' : 'afternoon';
+// Home follows YOUR day, not the clock (night shift too): a short path for the first hours after you wake up,
+// "what's next" after that, and from half an hour before your check-in until you wake, the check-in.
+function modeFor(now: Date, wake: string, checkIn: string): 'morning' | 'afternoon' | 'night' {
+  const at = (s: string) => { const { hour, minute } = parseHHMM(s); return hour * 60 + minute; };
+  const since = (from: number) => (now.getHours() * 60 + now.getMinutes() - from + 1440) % 1440; // minutes since, around midnight
+  const nightStart = at(checkIn) - 30;
+  const nightLength = (at(wake) - nightStart + 1440) % 1440;
+  if (since(nightStart) < nightLength) return 'night';
+  return since(at(wake)) < 5 * 60 ? 'morning' : 'afternoon';
 }
 
 export default function Home() {
@@ -42,7 +44,7 @@ export default function Home() {
   const [nudgeDone, setNudgeDone] = useState(false);
 
   const now = new Date();
-  const mode = modeFor(now, settings.eveningReview || '21:30');
+  const mode = modeFor(now, settings.morningDigest || '07:00', settings.eveningReview || '21:30');
   if (mode === 'night' && !showDay) return <CheckIn tasks={tasks} settings={settings} setTasks={setTasks} onSeeDay={() => setShowDay(true)} />;
 
   const open = tasks.filter((t) => t.status === 'todo');
@@ -94,7 +96,7 @@ export default function Home() {
   const drop = async (t: Task) => setTasks(await dropTask(t));
   const talk = () => { router.navigate('/kasama'); setTimeout(toggleListening, 350); };
 
-  const hello = mode === 'morning' ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
+  const hello = now.getHours() < 12 && now.getHours() >= 4 ? 'Good morning' : now.getHours() >= 12 && now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
   const finished = `${doneToday.length} thing${doneToday.length === 1 ? '' : 's'}`;
   const line = open.length === 0 && doneToday.length > 0
     ? `You finished ${finished} today, and nothing is left. Rest well.`

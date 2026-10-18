@@ -14,8 +14,8 @@ import type { Encourage, Faith, FixedBlock, Person, Place, Reminders, Settings, 
 import { connectCalendars, type PhoneCalendar } from '@/lib/calendar';
 import { sayHi } from '@/lib/people';
 import { voiceReport } from '@/lib/voice';
-import { TimeField } from '@/components/TimePicker';
-import { sleepBlock } from '@/lib/sleep';
+import { prettyTime, TimeField } from '@/components/TimePicker';
+import { sleepBlock, timesFromSleep } from '@/lib/sleep';
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const PLACES: [Place, string, string][] = [
@@ -170,7 +170,7 @@ export default function You() {
 
       <H>How often should I tap your shoulder?</H>
       <View style={styles.wrap}>{REMINDERS.map(([v, label]) => <Chip key={v} label={label} active={(s.reminders ?? 'calm') === v} onPress={() => setS({ ...s, reminders: v })} />)}</View>
-      <Muted>{REMINDERS.find(([v]) => v === (s.reminders ?? 'calm'))?.[2]} I never send anything between 10 pm and 7 am, except your bedtime nudge.</Muted>
+      <Muted>{REMINDERS.find(([v]) => v === (s.reminders ?? 'calm'))?.[2]} I stay quiet while you sleep (your Sleep block), except your bedtime nudge.</Muted>
       {sleepBlock(s) ? (
         <View style={styles.wrap}>
           <Chip label="Nudge me at bedtime" active={s.bedtime !== false} onPress={() => setS({ ...s, bedtime: true })} />
@@ -181,14 +181,20 @@ export default function You() {
       )}
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <View style={{ flex: 1, gap: 4 }}>
-          <Muted style={{ fontSize: 14 }}>Morning hello</Muted>
-          <TimeField label="Morning hello" value={s.morningDigest} onChange={(v) => setS({ ...s, morningDigest: v })} />
+          <Muted style={{ fontSize: 14 }}>When you wake up</Muted>
+          <TimeField label="When you wake up" value={s.morningDigest} onChange={(v) => setS({ ...s, morningDigest: v })} />
         </View>
         <View style={{ flex: 1, gap: 4 }}>
-          <Muted style={{ fontSize: 14 }}>Evening check-in</Muted>
-          <TimeField label="Evening check-in" value={s.eveningReview} onChange={(v) => setS({ ...s, eveningReview: v })} />
+          <Muted style={{ fontSize: 14 }}>Check-in before sleep</Muted>
+          <TimeField label="Check-in before sleep" value={s.eveningReview} onChange={(v) => setS({ ...s, eveningReview: v })} />
         </View>
       </View>
+      {/* Night shift, or any rhythm: one tap lines these up with your Sleep block */}
+      {(() => {
+        const t = timesFromSleep(s);
+        if (!t || (t.morningDigest === s.morningDigest && t.eveningReview === s.eveningReview)) return null;
+        return <Button title={`Match my sleep: hello at ${prettyTime(t.morningDigest)}, check-in at ${prettyTime(t.eveningReview)}`} variant="link" onPress={() => setS({ ...s, ...t })} />;
+      })()}
       <Button title="Send a test notification" variant="link" onPress={test} />
 
       <H>What I know about you</H>
