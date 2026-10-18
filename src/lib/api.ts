@@ -34,8 +34,18 @@ async function call<T>(action: 'dump' | 'plan' | 'chat', payload: Record<string,
   return body as T;
 }
 
-// Only what Claude needs leaves the phone: first names of your people (never their numbers), no calendar ids
-const forCloud = ({ people, calendarIds: _ids, ...s }: Settings) => ({ ...s, people: (people ?? []).map((p) => p.name) });
+// Only what Claude needs leaves the phone: first names of your people (never their numbers), no calendar ids,
+// and only the newest part of "What I know about you" (it's resent with every message, so it adds up)
+const ABOUT_ME_CHARS = 1500;
+const forCloud = ({ people, calendarIds: _ids, aboutMe, ...s }: Settings) => ({
+  ...s,
+  aboutMe: aboutMe ? aboutMe.slice(-ABOUT_ME_CHARS) : aboutMe,
+  people: (people ?? []).map((p) => p.name),
+});
+
+// Longest message Kasama sends to Claude in one go; longer ones are kindly split by the Kasama screen
+export const MAX_CHAT_CHARS = 1000;
+export const MAX_DUMP_CHARS = 3000;
 
 export const sortThoughts = (raw: string, settings: Settings) => (DEMO ? mockDump(raw, settings) : call<DumpResult>('dump', { raw, settings: forCloud(settings) }));
 
@@ -47,7 +57,19 @@ export async function planDay(tasks: Task[], settings: Settings) {
   return call<DayPlan>('plan', { tasks: openTasks(tasks), settings: forCloud(withBusy) });
 }
 
-const openTasks = (tasks: Task[]) => tasks.filter((t) => t.status === 'todo').map((t) => ({ id: t.id, title: t.title, due_at: t.due_at, minutes: t.duration_min, priority: t.priority, repeat: t.repeat ?? null, planned: t.scheduled_start }));
+// Your task list rides along with every message, so send only the 30 that matter most right now:
+// planned today first, then the soonest deadlines, then by priority. Titles are trimmed.
+const MAX_TASKS = 30;
+const rank = { high: 0, medium: 1, low: 2 } as const;
+const openTasks = (tasks: Task[]) => {
+  const today = new Date().toDateString();
+  const plannedToday = (t: Task) => (t.scheduled_start && new Date(t.scheduled_start).toDateString() === today ? 0 : 1);
+  return tasks
+    .filter((t) => t.status === 'todo')
+    .sort((a, b) => plannedToday(a) - plannedToday(b) || (a.due_at ?? '9').localeCompare(b.due_at ?? '9') || rank[a.priority] - rank[b.priority])
+    .slice(0, MAX_TASKS)
+    .map((t) => ({ id: t.id, title: t.title.slice(0, 80), due_at: t.due_at, minutes: t.duration_min, priority: t.priority, repeat: t.repeat ?? null, planned: t.scheduled_start }));
+};
 
 export async function chat(message: string, history: ChatMessage[], tasks: Task[], settings: Settings) {
   if (DEMO) return mockChat(message, tasks);

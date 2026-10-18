@@ -8,7 +8,7 @@ import { Scene, TINTS, Vessel } from '@/components/Scene';
 import { Drift } from '@/components/Motion';
 import { FONT, useColors } from '@/lib/theme';
 import { useData } from '@/lib/useData';
-import { chat, sortThoughts } from '@/lib/api';
+import { chat, MAX_CHAT_CHARS, MAX_DUMP_CHARS, sortThoughts } from '@/lib/api';
 import { addTasks, applyChatResult } from '@/lib/actions';
 import { addIdeas, getAlarms, getChat, getIdeas, getNotes, getSettings, getTasks, newId, saveAlarms, saveChat, saveIdeas, saveNotes, saveSettings, saveTasks } from '@/lib/storage';
 import { rescheduleAll } from '@/lib/notifications';
@@ -54,6 +54,15 @@ export default function KasamaScreen() {
   async function send(raw = text) {
     const message = raw.trim();
     if (!message || sending.current) return;
+    // Very long messages cost a lot; ask to split them instead (nothing is sent, your text stays in the box)
+    const limit = looksLikeDump(message) ? MAX_DUMP_CHARS : MAX_CHAT_CHARS;
+    if (message.length > limit) {
+      const tip: ChatMessage = { id: newId(), role: 'assistant', text: `That's a lot to hold at once! Can you send it in two parts? About ${limit} letters at a time works best. (You're at ${message.length}.)`, created_at: new Date().toISOString() };
+      const withTip = [...messages, tip];
+      setMessages(withTip);
+      await saveChat(withTip);
+      return;
+    }
     sending.current = true;
     if (voice.listening) toggleListening();
     const mine: ChatMessage = { id: newId(), role: 'user', text: message, created_at: new Date().toISOString() };

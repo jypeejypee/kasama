@@ -4,7 +4,7 @@
 //
 // Deploy:  npx supabase functions deploy assistant --no-verify-jwt
 // Secrets: npx supabase secrets set ANTHROPIC_API_KEY=... APP_SECRET=... CLAUDE_MODEL=...
-// Optional: DAILY_LIMIT (per phone, default 60) and GLOBAL_DAILY_LIMIT (everyone together, default 1000)
+// Optional: DAILY_LIMIT (per phone, default 20) and GLOBAL_DAILY_LIMIT (everyone together, default 200)
 // Needs the usage table from supabase/migrations and Anonymous Sign-Ins turned on (see README step 3).
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
@@ -18,7 +18,8 @@ const LIGHT_MODEL = Deno.env.get('CLAUDE_LIGHT_MODEL') ?? 'claude-haiku-5-5';
 const HEAVY = /\b(pagod|tired|exhausted|sad|lungkot|malungkot|iyak|cry|crying|stress|stressed|anxious|anxiety|kaba|takot|scared|afraid|lonely|alone|mag-isa|depress|hopeless|worthless|overwhelm|panic|hurt|sakit|ayoko na|give up|suko|die|mamatay|patay|suicide|kill|self.?harm|wala nang|di ko na kaya|hindi ko na kaya|help me|tulong)/i;
 // Supabase gives every Edge Function these two automatically
 const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } });
-const DAILY_LIMIT = Number(Deno.env.get('DAILY_LIMIT') ?? 30);
+// Testing-phase limits; raise them in Supabase secrets when you're ready
+const DAILY_LIMIT = Number(Deno.env.get('DAILY_LIMIT') ?? 20);
 const GLOBAL_DAILY_LIMIT = Number(Deno.env.get('GLOBAL_DAILY_LIMIT') ?? 200);
 // These models can hand a declined request to a fallback model inside the same call
 const FALLBACK_MODELS = ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1'];
@@ -80,7 +81,7 @@ function persona(s: Settings) {
 
 const NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const scheduleText = (s: Settings) => (s?.fixedBlocks ?? []).map((b) => `- ${b.label}: ${b.days.map((d) => NAMES[d]).join(', ')} ${b.start}-${b.end}`).join('\n');
-const aboutText = (s: Settings) => (s?.aboutMe?.trim() ? `\n\nWhat they told you about themselves (follow it):\n${s.aboutMe.trim().slice(-4000)}` : '');
+const aboutText = (s: Settings) => (s?.aboutMe?.trim() ? `\n\nWhat they told you about themselves (follow it):\n${s.aboutMe.trim().slice(-1500)}` : '');
 
 // Dollars per million tokens (input, output), for the cost estimate in the logs
 const PRICES: Record<string, [number, number]> = { 'claude-sonnet-5-5': [2, 10], 'claude-haiku-5-5': [0.1, 0.5] };
@@ -130,19 +131,19 @@ const TASK_SCHEMA = obj({
 
 function dump(body: { raw: string; now: string; offset: string; settings: Settings }) {
   return askForJson(
-    `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nBRAIN DUMP:\n${String(body.raw).slice(0, 8000)}\n\n` +
+    `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nBRAIN DUMP:\n${String(body.raw).slice(0, 3000)}\n\n` +
       'Summarize what is on their mind in 2-3 sentences, in your own voice as Kasama (reply in English). Pull out every concrete task with a short verb-first title. ' +
       `Turn words like "tomorrow", "sat", "end of month" into real dates; write times as ISO 8601 with offset ${body.offset}. ` +
       'Estimate duration in minutes. Ideas, plans for someday, feelings and loose thoughts go in ideas (short, one per item), not tasks. ' +
       'In heads_up, warn about deadlines that clash with fixed blocks or look unrealistic.',
     obj({ summary: str, tasks: { type: 'array', items: TASK_SCHEMA }, ideas: strList, heads_up: strList }),
-    { route: 'dump', effort: 'medium', settings: body.settings, light: !HEAVY.test(String(body.raw)) },
+    { route: 'dump', effort: 'low', settings: body.settings, light: !HEAVY.test(String(body.raw)) },
   );
 }
 
 function plan(body: { tasks: unknown[]; now: string; offset: string; settings: Settings }) {
   return askForJson(
-    `Now: ${body.now}\n\nFixed schedule (never overlap these):\n${scheduleText(body.settings)}\n\nOpen tasks:\n${JSON.stringify(body.tasks).slice(0, 12000)}\n\n` +
+    `Now: ${body.now}\n\nFixed schedule (never overlap these):\n${scheduleText(body.settings)}\n\nOpen tasks:\n${JSON.stringify(body.tasks).slice(0, 6000)}\n\n` +
       'Plan the REST OF TODAY only, starting after now. Urgent and high-priority first, 10-minute breaks between long blocks, ' +
       `a lighter evening before sleep. Do not overfill. Times as ISO 8601 with offset ${body.offset}. ` +
       'Use the task id in task_id (null for breaks). message: 1-2 sentences in the style set for this person.',
@@ -166,8 +167,8 @@ function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; no
   const history: Anthropic.Beta.BetaMessageParam[] = (body.history ?? []).slice(-HISTORY).map((m) => ({ role: m.role, content: String(m.text).slice(0, 2000) }));
   while (history.length && history[0].role !== 'user') history.shift();
   return askForJson(
-    `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nTheir open tasks (with ids):\n${JSON.stringify(body.tasks).slice(0, 12000)}\n\n` +
-      `THEY SAY:\n${String(body.message).slice(0, 4000)}\n\n` +
+    `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nTheir open tasks (with ids):\n${JSON.stringify(body.tasks).slice(0, 6000)}\n\n` +
+      `THEY SAY:\n${String(body.message).slice(0, 1000)}\n\n` +
       'Reply as Kasama, in the same language mix they use (English or Taglish), in 1-4 short sentences. ' +
       'If they ask you to change their tasks, do it with actions instead of only talking about it: ' +
       'add (fill task), done / drop (task_id from the list), move (task_id plus the new due_at). Leave unused fields null. ' +
@@ -227,7 +228,7 @@ function clean(body: Record<string, unknown>) {
     people: Array.isArray(s.people) ? s.people.slice(0, 5).map((p) => String(p).slice(0, 30)) : undefined,
   };
   const history = (Array.isArray(body.history) ? body.history : []).slice(-HISTORY).map((m: { role?: string; text?: string }) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', text: String(m.text ?? '') }));
-  return { ...body, settings, history, tasks: Array.isArray(body.tasks) ? body.tasks.slice(0, 200) : [], now: String(body.now ?? '').slice(0, 80), offset: String(body.offset ?? '+08:00').slice(0, 6) };
+  return { ...body, settings, history, tasks: Array.isArray(body.tasks) ? body.tasks.slice(0, 30) : [], now: String(body.now ?? '').slice(0, 80), offset: String(body.offset ?? '+08:00').slice(0, 6) };
 }
 
 Deno.serve(async (req) => {
