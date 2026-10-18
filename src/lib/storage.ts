@@ -10,8 +10,7 @@ export const DEFAULT_SETTINGS: Settings = {
   morningDigest: '07:00',
   eveningReview: '21:30',
   fixedBlocks: [
-    { id: 'work', label: 'Work (Concentrix)', days: [1, 2, 3, 4, 5], start: '09:00', end: '18:00' },
-    { id: 'java', label: 'Java class (CIICC)', days: [6], start: '08:00', end: '17:00' },
+    { id: 'work', label: 'Work or school', days: [1, 2, 3, 4, 5], start: '09:00', end: '18:00' },
     { id: 'sleep', label: 'Sleep', days: [0, 1, 2, 3, 4, 5, 6], start: '23:30', end: '07:00' },
   ],
 };
@@ -69,6 +68,13 @@ export async function remember(facts: string[]) {
   const known = new Set(lines.map((l) => l.replace(/^- /, '').toLowerCase()));
   const added = facts.map((f) => f.trim()).filter((f) => f && !known.has(f.toLowerCase())).map((f) => `- ${f}`);
   if (added.length) await saveSettings({ ...s, aboutMe: [...lines, ...added].join('\n') });
+}
+
+// Keeps only the newest line that starts with `prefix` (e.g. the last tired evening), so memory doesn't pile up
+export async function rememberLatest(prefix: string, fact: string) {
+  const s = await getSettings();
+  const lines = (s.aboutMe ?? '').split('\n').map((l) => l.trim()).filter((l) => l && !l.replace(/^- /, '').startsWith(prefix));
+  await saveSettings({ ...s, aboutMe: [...lines, `- ${fact}`].join('\n') });
 }
 
 export async function updateTask(id: string, patch: Partial<Task>) {

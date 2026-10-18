@@ -36,9 +36,9 @@ export async function setAlarms(requests: AlarmRequest[]) {
     if (await openClockApp(at, r.label)) {
       changes.push(`Opened your Clock app for a ${fmtDue(r.at)} alarm`);
     } else {
-      // iPhone apps can't create alarms, so Kasama rings a reminder instead
+      // iPhone apps can't create alarms, so Kasama sends a reminder instead (it won't ring on silent)
       later.push({ ...r, id: newId() });
-      changes.push(`I'll ring you at ${fmtDue(r.at)}: ${r.label}`);
+      changes.push(`I'll remind you at ${fmtDue(r.at)}: ${r.label}`);
     }
   }
   if (later.length) {

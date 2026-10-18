@@ -6,7 +6,20 @@ import type { ChatResult, DayPlan, ProposedTask, Repeat, Task } from './types';
 
 // Every change to tasks goes through here, so reminders always match your list.
 
-export async function toggleTask(t: Task) {
+const toggling = new Set<string>();
+
+export async function toggleTask(shown: Task) {
+  if (toggling.has(shown.id)) return getTasks();
+  toggling.add(shown.id);
+  try {
+    // The screen's copy may be old (a quick double tap), so use the saved one
+    return await toggleSaved((await getTasks()).find((x) => x.id === shown.id) ?? shown);
+  } finally {
+    toggling.delete(shown.id);
+  }
+}
+
+async function toggleSaved(t: Task) {
   const done = t.status !== 'done';
   let next = await updateTask(t.id, { status: done ? 'done' : 'todo', done_at: done ? new Date().toISOString() : null });
   if (t.repeat && done) {

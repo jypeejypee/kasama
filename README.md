@@ -90,7 +90,12 @@ The easiest way is from the Supabase website:
    - `ANTHROPIC_API_KEY` = your key from console.anthropic.com (set a monthly spend limit there)
    - `APP_SECRET` = any long random text
    - `CLAUDE_MODEL` = `claude-sonnet-5-5` (or leave it out, that is the default)
-5. Copy the function URL. It looks like `https://YOUR-PROJECT.supabase.co/functions/v1/assistant`.
+   - Optional: `DAILY_LIMIT` (Claude calls per phone per day, default `60`) and `GLOBAL_DAILY_LIMIT` (all phones together, default `1000`)
+5. **Daily limits** (so nobody can drain your Claude credit, even if they pull the secret out of the APK):
+   - **Authentication → Sign In / Providers → Anonymous Sign-Ins → on.** Each phone signs in once, with no email or password.
+   - **SQL Editor** → paste all of `supabase/migrations/20261018000000_usage_quota.sql` → **Run**.
+   - Recommended: **Authentication → Attack Protection → CAPTCHA**, if strangers start creating many sign-ins.
+6. Copy the function URL. It looks like `https://YOUR-PROJECT.supabase.co/functions/v1/assistant`.
 
 <details><summary>Prefer the command line?</summary>
 
@@ -112,6 +117,7 @@ Copy `.env.example` to `.env` and fill in:
 ```
 EXPO_PUBLIC_ASSISTANT_URL=https://YOUR-PROJECT.supabase.co/functions/v1/assistant
 EXPO_PUBLIC_APP_SECRET=the same APP_SECRET as step 3
+EXPO_PUBLIC_SUPABASE_ANON_KEY=Project Settings → API → anon / publishable key
 ```
 
 ### 5. Run it on your phone (testing)
@@ -147,7 +153,7 @@ npx eas-cli@latest init             # once: links this project to your account
 npm run build:apk                   # builds in the cloud, about 10–30 min
 ```
 
-**Before the first build:** the cloud build does not see your `.env` file, because it's git-ignored. Add the same two values on expo.dev → your project → **Environment variables** → environment **preview** (visibility "Plain text"): `EXPO_PUBLIC_ASSISTANT_URL` and `EXPO_PUBLIC_APP_SECRET`. Without them, the installed app can't reach Claude.
+**Before the first build:** the cloud build does not see your `.env` file, because it's git-ignored. Add the same three values on expo.dev → your project → **Environment variables** → environment **preview** (visibility "Plain text"): `EXPO_PUBLIC_ASSISTANT_URL`, `EXPO_PUBLIC_APP_SECRET` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Without them, the installed app can't reach Claude.
 
 When the build finishes, open the link it prints on your phone → download the APK → install it. Android will ask you to allow installing from your browser.
 
@@ -190,6 +196,10 @@ The bottom bar: **Home · Things · (Kasama) · Journey · You**.
 | Problem | Fix |
 |---|---|
 | `EXPO_PUBLIC_ASSISTANT_URL is missing` | `.env` is missing or misnamed. Stop the server and run `npx expo start --clear`. |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY is missing` | Add the anon key to `.env` (step 4), then `npx expo start --clear`. |
+| `Anonymous sign-ins are disabled` | Turn on Anonymous Sign-Ins in Supabase (step 3.5). |
+| `Something went wrong on my side` right after updating | Run the usage SQL (step 3.5) and redeploy the function. The Supabase logs show the exact error. |
+| `We've talked a lot today` | The daily limit was reached. It resets at midnight UTC (8 AM Manila). Raise `DAILY_LIMIT` if you need more. |
 | `Wrong app secret` | `EXPO_PUBLIC_APP_SECRET` in `.env` must equal `APP_SECRET` in Supabase. |
 | `401 Missing authorization header` | "Verify JWT" is still on for the function. Turn it off (step 3). |
 | `Claude error 404` / model error | Update the `CLAUDE_MODEL` secret to a current model name, e.g. `claude-sonnet-5-5`. |

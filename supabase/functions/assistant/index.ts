@@ -4,11 +4,18 @@
 //
 // Deploy:  npx supabase functions deploy assistant --no-verify-jwt
 // Secrets: npx supabase secrets set ANTHROPIC_API_KEY=... APP_SECRET=... CLAUDE_MODEL=...
+// Optional: DAILY_LIMIT (per phone, default 60) and GLOBAL_DAILY_LIMIT (everyone together, default 1000)
+// Needs the usage table from supabase/migrations and Anonymous Sign-Ins turned on (see README step 3).
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.133.0';
+import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
 const client = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 const MODEL = Deno.env.get('CLAUDE_MODEL') ?? 'claude-sonnet-5-5';
+// Supabase gives every Edge Function these two automatically
+const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } });
+const DAILY_LIMIT = Number(Deno.env.get('DAILY_LIMIT') ?? 60);
+const GLOBAL_DAILY_LIMIT = Number(Deno.env.get('GLOBAL_DAILY_LIMIT') ?? 1000);
 // These models can hand a declined request to a fallback model inside the same call
 const FALLBACK_MODELS = ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1'];
 
@@ -67,7 +74,7 @@ function persona(s: Settings) {
 
 const NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const scheduleText = (s: Settings) => (s?.fixedBlocks ?? []).map((b) => `- ${b.label}: ${b.days.map((d) => NAMES[d]).join(', ')} ${b.start}-${b.end}`).join('\n');
-const aboutText = (s: Settings) => (s?.aboutMe?.trim() ? `\n\nWhat they told you about themselves (follow it):\n${s.aboutMe.trim().slice(0, 4000)}` : '');
+const aboutText = (s: Settings) => (s?.aboutMe?.trim() ? `\n\nWhat they told you about themselves (follow it):\n${s.aboutMe.trim().slice(-4000)}` : '');
 
 // Structured outputs: Claude's reply is guaranteed to match the JSON schema
 async function askForJson<T>(prompt: string, schema: Record<string, unknown>, opts: { effort: Effort; settings: Settings; history?: Anthropic.Beta.BetaMessageParam[] }): Promise<T> {
@@ -137,7 +144,7 @@ function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; no
   const history: Anthropic.Beta.BetaMessageParam[] = (body.history ?? []).slice(-12).map((m) => ({ role: m.role, content: String(m.text).slice(0, 2000) }));
   while (history.length && history[0].role !== 'user') history.shift();
   return askForJson(
-    `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nHis open tasks (with ids):\n${JSON.stringify(body.tasks).slice(0, 12000)}\n\n` +
+    `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nTheir open tasks (with ids):\n${JSON.stringify(body.tasks).slice(0, 12000)}\n\n` +
       `THEY SAY:\n${String(body.message).slice(0, 4000)}\n\n` +
       'Reply as Kasama, in the same language mix they use (English or Taglish), in 1-4 short sentences. ' +
       'If they ask you to change their tasks, do it with actions instead of only talking about it: ' +
@@ -161,7 +168,8 @@ function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; no
 }
 
 // The app secret ships inside the APK, so treat it as a speed bump, not real auth.
-// These limits keep a leaked secret from draining your Claude credit (also set a spend limit in the Anthropic console).
+// Real protection: every phone signs in anonymously and gets a daily limit counted in the database,
+// plus one limit for everyone together. Also set a spend limit in the Anthropic console.
 const MAX_BODY = 64 * 1024; // bytes
 const LIMIT = { requests: 40, perMs: 10 * 60 * 1000 }; // per caller, best effort (resets when the function restarts)
 const seen = new Map<string, number[]>();
@@ -206,6 +214,18 @@ Deno.serve(async (req) => {
   if (!sameSecret(req.headers.get('x-app-secret'), secret)) return json({ error: 'Wrong app secret' }, 401);
   const caller = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
   if (tooMany(caller)) return json({ error: 'Too many requests. Take a breath and try again in a few minutes.' }, 429);
+
+  // Who is this phone? The app sends its anonymous sign-in token.
+  const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
+  const { data: who, error: authError } = token ? await admin.auth.getUser(token) : { data: { user: null }, error: null };
+  if (authError || !who.user) return json({ error: 'Please sign in again.', code: 'auth' }, 401);
+  // Counts this request, and says no once this phone (or everyone together) used up today's limit
+  const { data: allowed, error: usageError } = await admin.rpc('use_credit', { p_user: who.user.id, p_limit: DAILY_LIMIT, p_global: GLOBAL_DAILY_LIMIT });
+  if (usageError) {
+    console.error('usage check failed', usageError);
+    return json({ error: 'Something went wrong on my side. Try again in a moment.' }, 500);
+  }
+  if (!allowed) return json({ error: "We've talked a lot today. Let's rest and continue tomorrow." }, 429);
 
   try {
     const raw = await req.text();

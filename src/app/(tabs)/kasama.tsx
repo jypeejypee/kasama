@@ -9,11 +9,11 @@ import { FONT, useColors } from '@/lib/theme';
 import { useData } from '@/lib/useData';
 import { chat, sortThoughts } from '@/lib/api';
 import { addTasks, applyChatResult } from '@/lib/actions';
-import { addIdeas, getChat, getIdeas, getNotes, getSettings, getTasks, newId, saveChat, saveIdeas, saveNotes, saveSettings, saveTasks } from '@/lib/storage';
+import { addIdeas, getAlarms, getChat, getIdeas, getNotes, getSettings, getTasks, newId, saveAlarms, saveChat, saveIdeas, saveNotes, saveSettings, saveTasks } from '@/lib/storage';
 import { rescheduleAll } from '@/lib/notifications';
 import { fmtDue } from '@/lib/time';
 import { toggleListening, useVoice, voiceTarget } from '@/lib/voice';
-import type { ChatMessage, Idea, Task } from '@/lib/types';
+import type { Alarm, ChatMessage, Idea, Note, Task } from '@/lib/types';
 
 const STARTERS = ['Pagod ako, what can I skip today?', 'java activity sat, pay meralco before 20th, call mama', 'Set an alarm for 5am', 'Idea: sell my old laptop'];
 // Your messages sit like smooth stones, each one a little different
@@ -24,7 +24,7 @@ const pieces = (raw: string) => raw.split(/[,\n;]+/).map((s) => s.trim().replace
 // Several thoughts at once → sort them into tasks and ideas. One thought or a question → just talk.
 const looksLikeDump = (raw: string) => pieces(raw).length >= 3 || (pieces(raw).length >= 2 && raw.length > 60);
 
-type Snapshot = { messageId: string; tasks: Task[]; ideas: Idea[]; aboutMe: string };
+type Snapshot = { messageId: string; tasks: Task[]; ideas: Idea[]; notes: Note[]; alarms: Alarm[]; aboutMe: string; clock: boolean };
 
 // The heart of the app: talk or speak to Kasama. Questions get answers; messy dumps get sorted.
 // Every change Kasama makes shows an Undo, so you can trust it even in a hurry.
@@ -41,14 +41,18 @@ export default function KasamaScreen() {
   const input = useRef<TextInput>(null);
   const textRef = useRef(text);
   useEffect(() => { textRef.current = text; }, [text]);
+  const sending = useRef(false); // state updates too late to stop a quick double tap
 
   useFocusEffect(useCallback(() => { getChat().then(setMessages); }, []));
   // While you're here, speaking fills the message box
   useFocusEffect(useCallback(() => voiceTarget({ get: () => textRef.current, put: setText, focus: () => input.current?.focus() }), []));
+  // Leaving this screen ends Undo: you may change things elsewhere, and Undo must never wipe those
+  useFocusEffect(useCallback(() => () => setSnap(null), []));
 
   async function send(raw = text) {
     const message = raw.trim();
-    if (!message || busy) return;
+    if (!message || sending.current) return;
+    sending.current = true;
     if (voice.listening) toggleListening();
     const mine: ChatMessage = { id: newId(), role: 'user', text: message, created_at: new Date().toISOString() };
     const history = messages;
@@ -60,7 +64,7 @@ export default function KasamaScreen() {
     const replyId = newId();
     try {
       const fresh = await getSettings(); // memory may have changed in chat or You
-      const before: Snapshot = { messageId: replyId, tasks: await getTasks(), ideas: await getIdeas(), aboutMe: fresh.aboutMe ?? '' };
+      const before: Snapshot = { messageId: replyId, tasks: await getTasks(), ideas: await getIdeas(), notes: await getNotes(), alarms: await getAlarms(), aboutMe: fresh.aboutMe ?? '', clock: false };
       let reply: string;
       let changes: string[];
       if (dump) {
@@ -78,6 +82,7 @@ export default function KasamaScreen() {
         reply = r.reply;
         changes = applied.changes;
       }
+      before.clock = changes.some((ch) => ch.startsWith('Opened your Clock app'));
       setSnap(changes.length ? before : null);
       next = [...next, { id: replyId, role: 'assistant', text: reply, changes, created_at: new Date().toISOString() }];
     } catch (e) {
@@ -86,6 +91,7 @@ export default function KasamaScreen() {
       setMessages(next);
       await saveChat(next);
       setBusy('');
+      sending.current = false;
     }
   }
 
@@ -94,10 +100,13 @@ export default function KasamaScreen() {
     if (!snap) return;
     await saveTasks(snap.tasks);
     await saveIdeas(snap.ideas);
+    await saveNotes(snap.notes);
+    await saveAlarms(snap.alarms);
     await saveSettings({ ...(await getSettings()), aboutMe: snap.aboutMe });
     await rescheduleAll();
     setTasks(snap.tasks);
-    const next = messages.map((m) => (m.id === snap.messageId ? { ...m, changes: ['Undone. Everything is back how it was.'] } : m));
+    const undone = snap.clock ? 'Undone. Alarms in your Clock app stay, so delete those there.' : 'Undone. Everything is back how it was.';
+    const next = messages.map((m) => (m.id === snap.messageId ? { ...m, changes: [undone] } : m));
     setMessages(next);
     await saveChat(next);
     setSnap(null);

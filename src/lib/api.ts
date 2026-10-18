@@ -1,5 +1,6 @@
 import { describeNow } from './time';
 import { mockChat, mockDump, mockPlan } from './mock';
+import { accessToken, forgetSession } from './session';
 import type { ChatMessage, ChatResult, DayPlan, DumpResult, Settings, Task } from './types';
 
 // The Claude API key never goes inside the app (anyone could pull it out of the APK).
@@ -15,12 +16,19 @@ async function call<T>(action: 'dump' | 'plan' | 'chat', payload: Record<string,
   // The app secret travels in a header, so never send it over plain http
   if (!URL.startsWith('https://')) throw new Error('EXPO_PUBLIC_ASSISTANT_URL must start with https://');
   const now = describeNow();
-  const res = await fetch(URL, {
+  const send = async () => fetch(URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-app-secret': SECRET ?? '' },
+    headers: { 'Content-Type': 'application/json', 'x-app-secret': SECRET ?? '', Authorization: `Bearer ${await accessToken()}` },
     body: JSON.stringify({ action, now: now.text, offset: now.offset, ...payload }),
   });
-  const body = await res.json().catch(() => ({}));
+  let res = await send();
+  let body = await res.json().catch(() => ({}));
+  // Sign-in expired or was removed: sign in again once and retry
+  if (res.status === 401 && body.code === 'auth') {
+    await forgetSession();
+    res = await send();
+    body = await res.json().catch(() => ({}));
+  }
   if (!res.ok) throw new Error(body.error ?? `Assistant error ${res.status}`);
   return body as T;
 }

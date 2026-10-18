@@ -5,7 +5,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { FONT, NIGHT } from '@/lib/theme';
 import { endOfDay, fmtDue, fmtTime, isToday } from '@/lib/time';
 import { dropTask, moveToTomorrow, toggleTask } from '@/lib/actions';
-import { remember, saveMood } from '@/lib/storage';
+import { rememberLatest, saveMood } from '@/lib/storage';
 import type { Mood, Settings, Task } from '@/lib/types';
 
 const FEELINGS: [Mood['feeling'], string][] = [
@@ -34,7 +34,7 @@ export function CheckIn({ tasks, settings, setTasks, onSeeDay }: { tasks: Task[]
     setFeeling(i);
     await saveMood(FEELINGS[i][0]);
     // Kasama learns how your days feel, so it can plan kinder ones
-    if (FEELINGS[i][0] === 'Pagod') await remember([`Felt tired on ${new Date().toDateString()}, keep the next day light`]);
+    if (FEELINGS[i][0] === 'Pagod') await rememberLatest('Felt tired on', `Felt tired on ${new Date().toDateString()}, keep the next day light`);
   }
 
   const praise = doneToday.length

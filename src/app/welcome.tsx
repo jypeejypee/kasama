@@ -72,7 +72,7 @@ export default function Welcome() {
 
           <View style={{ height: 18 }} />
           <Button title="Let's go" onPress={start} />
-          <Muted style={{ textAlign: 'center', fontSize: 13 }}>Everything stays on your phone. You can change all of this later in You.</Muted>
+          <Muted style={{ textAlign: 'center', fontSize: 13 }}>Your lists are saved on this phone. What you tell me is sent securely to my AI helper so I can think. You can change all of this later in You.</Muted>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

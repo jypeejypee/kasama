@@ -149,7 +149,7 @@ export default function You() {
       <H>Behind the scenes</H>
       <DemoBadge />
       <Muted>{DEMO ? 'No backend connected yet, so I use simple on-phone rules. Add EXPO_PUBLIC_ASSISTANT_URL to .env to use Claude.' : 'Connected to your Kasama backend (Claude).'}</Muted>
-      <Muted>Your tasks and notes stay only on this phone.</Muted>
+      <Muted>{DEMO ? 'Everything stays on this phone.' : 'Your tasks and notes are saved on this phone. What you send me goes to the Kasama backend and Claude to get an answer.'}</Muted>
       <Button title="Clear finished tasks" variant="link" onPress={clearDone} />
     </ScrollView>
   );
