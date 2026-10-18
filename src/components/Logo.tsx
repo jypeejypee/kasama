@@ -19,9 +19,9 @@ const YOU = {
 } as const;
 
 // Kasama's logo: a big, steady stone (Kasama) and a small one resting close (you)
-export function Logo({ width = 120, gap }: { width?: number; gap?: string }) {
+export function Logo({ width = 120, gap, place }: { width?: number; gap?: string; place?: keyof typeof YOU }) {
   const c = useColors();
-  const [small, shade, light] = YOU[c.place];
+  const [small, shade, light] = YOU[place ?? c.place];
   return (
     <Svg width={width} height={(width * 170) / 200} viewBox="0 0 200 170" accessibilityLabel="Kasama: a big calm stone with a small stone resting beside it">
       <Ellipse cx={104} cy={156} rx={84} ry={7} fill="#ddd3c1" opacity={0.8} />
@@ -40,11 +40,9 @@ export function Logo({ width = 120, gap }: { width?: number; gap?: string }) {
 }
 
 // While Kasama opens: the same two stones as the splash, and the shadow under them is the loading bar.
-// A soft band of your stone's color glides left to right and back until Kasama is ready.
+// A slightly darker patch of the same shadow glides left to right and back until Kasama is ready.
 // It runs on the native side, so it stays smooth even while Kasama is busy.
 export function StoneLoader({ onShown }: { onShown?: () => void }) {
-  const c = useColors();
-  const [, shade] = YOU[c.place];
   const [move] = useState(() => new Animated.Value(0));
   useEffect(() => {
     const glide = (to: number) => Animated.timing(move, { toValue: to, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true });
@@ -53,7 +51,9 @@ export function StoneLoader({ onShown }: { onShown?: () => void }) {
     return () => loop.stop();
   }, [move]);
 
-  const width = 184; // matches the stones on the splash screen, so the change is seamless
+  // Exactly where Android draws the splash stones (a 200dp image; measured from assets/splash-icon.png),
+  // in the splash's own Dagat colors, so the hand-over from the still splash is invisible
+  const width = 171.8;
   const height = (width * 170) / 200;
   const s = width / 200;
   // The shadow in the logo is an ellipse 168 wide and 14 tall, centered at (104, 156)
@@ -62,12 +62,12 @@ export function StoneLoader({ onShown }: { onShown?: () => void }) {
   const x = move.interpolate({ inputRange: [0, 1], outputRange: [-band * 0.5, shadowW - band * 0.5] });
   return (
     <View onLayout={onShown} style={{ flex: 1, backgroundColor: '#f6f0e4', alignItems: 'center', justifyContent: 'center' }} accessibilityLabel="Kasama is opening">
-      <View style={{ width, height }}>
-        <Logo width={width} gap="#f6f0e4" />
+      <View style={{ width, height, transform: [{ translateX: -4.33 }, { translateY: -0.75 }] }}>
+        <Logo width={width} gap="#f6f0e4" place="dagat" />
         {/* A circle squashed flat into the shadow's ellipse; it clips the gliding band to the shadow's shape */}
         <View pointerEvents="none" style={{ position: 'absolute', left: 20 * s, top: 156 * s - shadowW / 2, width: shadowW, height: shadowW, borderRadius: shadowW / 2, overflow: 'hidden', transform: [{ scaleY: 14 / 168 }] }}>
           <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, width: band, flexDirection: 'row', transform: [{ translateX: x }] }}>
-            {[0.25, 0.5, 0.8, 0.5, 0.25].map((o, i) => <View key={i} style={{ flex: 1, backgroundColor: shade, opacity: o }} />)}
+            {[0.2, 0.45, 0.7, 0.45, 0.2].map((o, i) => <View key={i} style={{ flex: 1, backgroundColor: '#bfb196', opacity: o }} />)}
           </Animated.View>
         </View>
       </View>
