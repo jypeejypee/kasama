@@ -20,10 +20,13 @@ export default function RootLayout() {
   // Check for a new version while the splash is up (a few seconds at most), so updates apply on this open
   const [checked, setChecked] = useState(false);
   useEffect(() => { updateIfAvailable().finally(() => setChecked(true)); }, []);
+  // Show the stones' loading for at least one full glide (there and back), so it never just flickers
+  const [shown, setShown] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setShown(true), 2000); return () => clearTimeout(t); }, []);
 
   useEffect(() => {
-    if ((loaded || error) && checked) SplashScreen.hideAsync().catch(() => {});
-  }, [loaded, error, checked]);
+    if ((loaded || error) && checked && shown) SplashScreen.hideAsync().catch(() => {});
+  }, [loaded, error, checked, shown]);
 
   useEffect(() => {
     getSettings().then((s) => setPlace(s.place));
@@ -35,7 +38,7 @@ export default function RootLayout() {
   }, []);
 
   // First open: say hi before anything else (after the screens are ready to navigate)
-  const ready = (loaded || !!error) && checked;
+  const ready = (loaded || !!error) && checked && shown;
   useEffect(() => {
     if (!ready) return;
     getSettings().then((s) => {

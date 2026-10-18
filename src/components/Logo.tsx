@@ -47,7 +47,7 @@ export function StoneLoader({ onShown }: { onShown?: () => void }) {
   const [, shade] = YOU[c.place];
   const [move] = useState(() => new Animated.Value(0));
   useEffect(() => {
-    const glide = (to: number) => Animated.timing(move, { toValue: to, duration: 1300, easing: Easing.inOut(Easing.sin), useNativeDriver: true });
+    const glide = (to: number) => Animated.timing(move, { toValue: to, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true });
     const loop = Animated.loop(Animated.sequence([glide(1), glide(0)]));
     loop.start();
     return () => loop.stop();
