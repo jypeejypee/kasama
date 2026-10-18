@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, DemoBadge, H, Muted, Say, Title } from '@/components/ui';
@@ -62,9 +63,11 @@ export default function Home() {
     try {
       const result = await planDay(tasks, settings);
       const nextTasks = await applyPlan(result);
-      setMoves(describeMoves(missed, nextTasks)); // say what changed, like a friend would
+      // Say plainly what got a time, like a friend would, so the plan is easy to see
+      const slots = result.blocks.filter((b) => b.task_id).map((b) => `${fmtTime(b.start)} ${b.title}`);
+      setMoves([...describeMoves(missed, nextTasks), ...slots]);
       setTasks(nextTasks);
-      setMessage(result.message);
+      setMessage(slots.length ? result.message : `${result.message} Nothing more fits today, so the rest can wait for tomorrow.`);
     } catch (e) {
       setMessage((e as Error).message);
     } finally {
@@ -92,7 +95,12 @@ export default function Home() {
       <View>
         <Scene height={240 + insets.top} time={mode === 'morning' ? 'dawn' : 'day'} />
         <View style={[styles.over, { paddingTop: insets.top + 18 }]}>
-          <Text style={{ color: c.muted, fontSize: 15, fontFamily: FONT.strong }}>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ flex: 1, color: c.muted, fontSize: 15, fontFamily: FONT.strong }}>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Open my calendar" onPress={() => router.navigate({ pathname: '/things', params: { view: 'calendar', at: String(Date.now()) } })} style={styles.round}>
+              <Ionicons name="calendar-outline" size={21} color={c.text} />
+            </Pressable>
+          </View>
           <Title size={28} style={{ marginTop: 14 }}>{hello}{name ? `, ${name}` : ''}.</Title>
           <Say style={{ marginTop: 8, maxWidth: 300 }}>{line}</Say>
         </View>
@@ -157,5 +165,6 @@ export default function Home() {
 const styles = StyleSheet.create({
   over: { position: 'absolute', left: 0, right: 0, top: 0, paddingHorizontal: 24 },
   body: { paddingHorizontal: 24, gap: 6 },
+  round: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' },
   soft: { borderRadius: 26, padding: 18, gap: 8, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.75)' },
 });

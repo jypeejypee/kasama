@@ -61,3 +61,23 @@ const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.g
 // Only times go out; the label is always just "Busy".
 export const busyAsBlocks = (busy: Busy[]): FixedBlock[] =>
   busy.map((b, i) => ({ id: `cal-${i}`, label: 'Busy (calendar)', days: [b.start.getDay()], start: hhmm(b.start), end: b.end > endOfDay() ? '23:59' : hhmm(b.end) }));
+
+// Your phone calendar's events for one day, for the calendar view only.
+// Names are shown on this phone and never sent anywhere.
+export type PhoneEvent = { id: string; title: string; start: Date; end: Date; allDay: boolean; color?: string };
+export async function eventsOn(calendarIds: string[], day: Date): Promise<PhoneEvent[]> {
+  if (!Cal || calendarIds.length === 0) return [];
+  try {
+    if (!(await Cal.getCalendarPermissions()).granted) return [];
+    const start = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    const end = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59);
+    const cals = await Cal.getCalendars(Cal.EntityTypes.EVENT);
+    const color = new Map(cals.map((c) => [c.id, c.color]));
+    const events = await Cal.listEvents(calendarIds, start, end);
+    return events
+      .map((e) => ({ id: String(e.id), title: e.title || 'Busy', start: new Date(e.startDate), end: new Date(e.endDate), allDay: !!e.allDay, color: color.get(String(e.calendarId)) }))
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+  } catch {
+    return [];
+  }
+}

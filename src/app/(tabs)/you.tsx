@@ -13,6 +13,7 @@ import { DEMO } from '@/lib/api';
 import type { Encourage, Faith, FixedBlock, Person, Place, Reminders, Settings, Support } from '@/lib/types';
 import { connectCalendars, type PhoneCalendar } from '@/lib/calendar';
 import { sayHi } from '@/lib/people';
+import { voiceReport } from '@/lib/voice';
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const PLACES: [Place, string, string][] = [
@@ -37,6 +38,7 @@ export default function You() {
   const [who, setWho] = useState({ name: '', how: 'sms' as Person['how'], handle: '' });
   const [cals, setCals] = useState<PhoneCalendar[] | null>(null);
   const [calMsg, setCalMsg] = useState('');
+  const [micReport, setMicReport] = useState<string[]>([]);
   // Load the saved settings each time you open this screen (chat may have added to About me)
   useFocusEffect(useCallback(() => {
     getSettings().then((saved) => {
@@ -223,6 +225,11 @@ export default function You() {
         </View>
       )}
       <Muted style={{ fontSize: 13 }}>Their numbers stay on this phone. Only first names reach me, so I can say &quot;maybe message Mia?&quot;</Muted>
+
+      <H>Voice</H>
+      <Muted>If the mic doesn&apos;t work, tap this and share a screenshot of what it says.</Muted>
+      <Button title="Test my mic" variant="secondary" onPress={async () => setMicReport(await voiceReport())} />
+      {micReport.map((l) => <Muted key={l} style={{ fontSize: 14 }}>· {l}</Muted>)}
 
       <H>Your calendar</H>
       <Muted>I can see when you&apos;re busy, not what you&apos;re doing. Event names never leave your phone. Plan my day then works around your meetings.</Muted>

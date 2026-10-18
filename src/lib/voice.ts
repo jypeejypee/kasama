@@ -116,3 +116,38 @@ export async function toggleListening() {
 }
 
 export const clearVoiceNote = () => set({ note: '' });
+
+// "Test my mic" in You: what this phone offers, in plain words, so a problem can be found from a screenshot
+export async function voiceReport(): Promise<string[]> {
+  if (!Speech) return ['Voice part: missing in this version of the app (Expo Go, or an old install).'];
+  const m = Speech.ExpoSpeechRecognitionModule;
+  const lines: string[] = [];
+  try {
+    const perm = await m.getPermissionsAsync();
+    lines.push(`Microphone permission: ${perm.granted ? 'allowed' : perm.canAskAgain ? 'not yet allowed' : 'blocked (allow it in phone settings)'}`);
+  } catch (e) {
+    lines.push(`Microphone permission: could not check (${(e as Error).message})`);
+  }
+  try {
+    lines.push(`Voice service available: ${m.isRecognitionAvailable() ? 'yes' : 'no'}`);
+  } catch (e) {
+    lines.push(`Voice service available: could not check (${(e as Error).message})`);
+  }
+  if (Platform.OS === 'android') {
+    try {
+      const have = m.getSpeechRecognitionServices();
+      lines.push(`Voice services on this phone: ${have.length ? have.join(', ') : 'none found'}`);
+      lines.push(`Kasama will use: ${SERVICES.find((p) => have.includes(p)) ?? 'the phone default'}`);
+    } catch (e) {
+      lines.push(`Voice services: could not check (${(e as Error).message})`);
+    }
+    try {
+      lines.push(`Phone default: ${m.getDefaultRecognitionService().packageName || 'none'}`);
+    } catch {
+      lines.push('Phone default: unknown');
+    }
+    lines.push(`Android version: ${Platform.Version}`);
+  }
+  if (state.note) lines.push(`Last voice message: ${state.note}`);
+  return lines;
+}
