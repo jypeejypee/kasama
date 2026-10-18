@@ -121,7 +121,7 @@ const str = { type: 'string' };
 const strList = { type: 'array', items: str };
 
 const TASK_SCHEMA = obj({
-  title: str,
+  title: { ...str, description: 'Short verb-first title. Never put the date or time in it; those go in due_at' },
   notes: nullable(str),
   due_at: { ...nullable(str), description: 'ISO 8601 with the given UTC offset, or null' },
   duration_min: { type: 'integer', description: 'Minutes, 5 to 480' },
@@ -132,7 +132,7 @@ const TASK_SCHEMA = obj({
 function dump(body: { raw: string; now: string; offset: string; settings: Settings }) {
   return askForJson(
     `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nBRAIN DUMP:\n${String(body.raw).slice(0, 3000)}\n\n` +
-      'Summarize what is on their mind in 2-3 sentences, in your own voice as Kasama (reply in English). Pull out every concrete task with a short verb-first title. ' +
+      'Summarize what is on their mind in 2-3 sentences, in your own voice as Kasama (reply in English). Pull out every concrete task with a short verb-first title, leaving the date and time out of the title. ' +
       `Turn words like "tomorrow", "sat", "end of month" into real dates; write times as ISO 8601 with offset ${body.offset}. ` +
       'Estimate duration in minutes. Ideas, plans for someday, feelings and loose thoughts go in ideas (short, one per item), not tasks. ' +
       'In heads_up, warn about deadlines that clash with fixed blocks or look unrealistic.',
@@ -146,7 +146,7 @@ function plan(body: { tasks: unknown[]; now: string; offset: string; settings: S
     `Now: ${body.now}\n\nFixed schedule (never overlap these):\n${scheduleText(body.settings)}\n\nOpen tasks:\n${JSON.stringify(body.tasks).slice(0, 6000)}\n\n` +
       'Plan the REST OF TODAY only, starting after now. Urgent and high-priority first, 10-minute breaks between long blocks, ' +
       `a lighter evening before sleep. Do not overfill. Times as ISO 8601 with offset ${body.offset}. ` +
-      'Use the task id in task_id (null for breaks). message: 1-2 sentences in the style set for this person.',
+      'Use the task id in task_id (null for breaks). message: 1-2 sentences in the style set for this person. Write times the way people say them, like 10:00 PM, never 24-hour like 22:00.',
     obj({
       message: str,
       blocks: { type: 'array', items: obj({ task_id: nullable(str), title: str, start: str, end: str }) },

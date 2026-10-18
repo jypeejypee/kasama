@@ -18,6 +18,8 @@ import { getSettings, saveSettings } from '@/lib/storage';
 import type { Task } from '@/lib/types';
 
 const rank = { high: 0, medium: 1, low: 2 } as const;
+// The open tasks, as one short key, to know whether the list changed since Kasama spoke
+const openKey = (list: Task[]) => list.filter((t) => t.status === 'todo').map((t) => t.id).sort().join(',');
 
 // Home changes with your day: a short path in the morning, "what's next" in the afternoon,
 // and at night it becomes the evening check-in.
@@ -35,6 +37,7 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [moves, setMoves] = useState<string[]>([]);
+  const [planFor, setPlanFor] = useState(''); // which open list the message and moves were made for
   const [showDay, setShowDay] = useState(false);
   const [nudgeDone, setNudgeDone] = useState(false);
 
@@ -58,7 +61,7 @@ export default function Home() {
   const nudged = async () => { setNudgeDone(true); await saveSettings({ ...(await getSettings()), nudgedAt: new Date().toISOString() }); };
 
   async function plan() {
-    if (open.length === 0) return setMessage('Nothing to plan yet. Tell me what is on your mind first.');
+    if (open.length === 0) { setPlanFor(openKey(tasks)); return setMessage('Nothing to plan yet. Tell me what is on your mind first.'); }
     setBusy(true);
     try {
       const result = await planDay(tasks, settings);
@@ -67,8 +70,10 @@ export default function Home() {
       const slots = result.blocks.filter((b) => b.task_id).map((b) => `${fmtTime(b.start)} ${b.title}`);
       setMoves([...describeMoves(missed, nextTasks), ...slots]);
       setTasks(nextTasks);
+      setPlanFor(openKey(nextTasks));
       setMessage(slots.length ? result.message : `${result.message} Nothing more fits today, so the rest can wait for tomorrow.`);
     } catch (e) {
+      setPlanFor(openKey(tasks));
       setMessage((e as Error).message);
     } finally {
       setBusy(false);
@@ -76,19 +81,27 @@ export default function Home() {
   }
 
   async function missedToTomorrow() {
-    setTasks(await moveToTomorrow(missed.map((t) => t.id)));
+    const next = await moveToTomorrow(missed.map((t) => t.id));
+    setTasks(next);
+    setPlanFor(openKey(next));
     setMoves(missed.map((t) => `Moved ${t.title} to tomorrow`));
   }
+  // Kasama's last plan only makes sense for the list it was made for: once you finish, add or
+  // let go of something, the old message quietly disappears instead of contradicting the screen
+  const fresh = planFor === openKey(tasks);
   const toggle = async (t: Task) => setTasks(await toggleTask(t));
   const drop = async (t: Task) => setTasks(await dropTask(t));
   const talk = () => { router.navigate('/kasama'); setTimeout(toggleListening, 350); };
 
   const hello = mode === 'morning' ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
-  const line = open.length === 0
-    ? 'Your day is wide open. Nothing to carry yet.'
-    : doneToday.length > 0
-      ? `You've already finished ${doneToday.length} thing${doneToday.length === 1 ? '' : 's'} today. I saw that.`
-      : mode === 'morning' ? "Today's path is short:" : "Here's what's next.";
+  const finished = `${doneToday.length} thing${doneToday.length === 1 ? '' : 's'}`;
+  const line = open.length === 0 && doneToday.length > 0
+    ? `You finished ${finished} today, and nothing is left. Rest well.`
+    : open.length === 0
+      ? 'Your day is wide open. Nothing to carry yet.'
+      : doneToday.length > 0
+        ? `You've already finished ${finished} today. I saw that.`
+        : mode === 'morning' ? "Today's path is short:" : "Here's what's next.";
 
   return (
     <ScrollView style={{ backgroundColor: c.ground }} contentContainerStyle={{ paddingBottom: 130 }}>
@@ -108,8 +121,8 @@ export default function Home() {
 
       <View style={styles.body}>
         <DemoBadge />
-        {!!message && <Say>{message}</Say>}
-        {moves.map((m) => <Text key={m} style={{ color: c.accent, fontFamily: FONT.strong, fontSize: 15 }}>✓ {m}</Text>)}
+        {fresh && !!message && <Say>{message}</Say>}
+        {fresh && moves.map((m) => <Text key={m} style={{ color: c.accent, fontFamily: FONT.strong, fontSize: 15 }}>✓ {m}</Text>)}
 
         {missed.length > 0 && (
           <View style={styles.soft}>
