@@ -38,18 +38,29 @@ let lang = 'fil-PH';
 // Google's voice services, best first; phones differ in which one they have
 const SERVICES = ['com.google.android.tts', 'com.google.android.googlequicksearchbox', 'com.google.android.as'];
 
-function begin() {
+// Which voice service to try, in order: Google's that this phone has, then the phone's own default.
+// If one is busy (another app holds it), Kasama quietly moves to the next.
+let options: (string | undefined)[] = [undefined];
+let attempt = 0;
+let starting = false; // one tap = one listening session, never two
+
+function pickOptions() {
+  if (!Speech || Platform.OS !== 'android') return [undefined];
+  try {
+    const have = Speech.ExpoSpeechRecognitionModule.getSpeechRecognitionServices();
+    return [...SERVICES.filter((p) => have.includes(p)), undefined];
+  } catch {
+    return [undefined];
+  }
+}
+
+// Close anything still open, give the phone a moment, then listen
+async function begin() {
   if (!Speech) return;
   const m = Speech.ExpoSpeechRecognitionModule;
-  let service: string | undefined;
-  if (Platform.OS === 'android') {
-    try {
-      const have = m.getSpeechRecognitionServices();
-      service = SERVICES.find((p) => have.includes(p));
-    } catch {
-      service = undefined; // let the phone use its default
-    }
-  }
+  try { m.abort(); } catch { /* nothing was open */ }
+  await new Promise((r) => setTimeout(r, 300));
+  const service = options[attempt];
   m.start({
     lang,
     interimResults: true,
@@ -61,7 +72,7 @@ function begin() {
 
 if (Speech) {
   const m = Speech.ExpoSpeechRecognitionModule;
-  m.addListener('start', () => set({ listening: true, note: "I'm listening… tap the mic again when you're done." }));
+  m.addListener('start', () => { starting = false; set({ listening: true, note: "I'm listening… tap the mic again when you're done." }); });
   m.addListener('end', () => set({ listening: false, note: state.note.startsWith("I'm listening") ? '' : state.note }));
   m.addListener('result', (e) => {
     const said = e.results[0]?.transcript?.trim();
@@ -80,6 +91,13 @@ if (Speech) {
       begin();
       return;
     }
+    // This voice service is busy or broke off: try the next one before giving up
+    if ((e.error === 'busy' || e.error === 'client' || e.error === 'service-not-allowed') && attempt < options.length - 1) {
+      attempt += 1;
+      begin();
+      return;
+    }
+    starting = false;
     const note = e.error === 'not-allowed' ? 'I need the microphone to hear you. Allow it in your phone settings.'
       : e.error === 'no-speech' || e.error === 'speech-timeout' ? "I didn't catch anything. Tap the mic and try again."
       : e.error === 'aborted' ? ''
@@ -101,17 +119,25 @@ export async function toggleListening() {
     m.stop();
     return;
   }
+  if (starting) return; // already getting ready from an earlier tap
+  starting = true;
+  setTimeout(() => { starting = false; }, 8000); // never stay stuck if the phone stays silent
   const perm = await m.requestPermissionsAsync();
   if (!perm.granted) {
+    starting = false;
     set({ note: 'I need the microphone to hear you. Allow it in your phone settings.' });
     return;
   }
   if (!m.isRecognitionAvailable()) {
+    starting = false;
     set({ note: NO_SERVICE });
     return;
   }
   kept = target?.get() ?? '';
   lang = 'fil-PH';
+  options = pickOptions();
+  attempt = 0;
+  set({ note: 'Getting ready to listen…' });
   begin();
 }
 
