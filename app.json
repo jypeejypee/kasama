@@ -8,7 +8,11 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jaypee.kasama"
+      "bundleIdentifier": "com.jaypee.kasama",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,9 +27,18 @@
         "SCHEDULE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
         "com.android.alarm.permission.SET_ALARM",
-        "android.permission.READ_CALENDAR"
+        "android.permission.READ_CALENDAR",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.WRITE_CALENDAR",
+        "SCHEDULE_EXACT_ALARM",
+        "POST_NOTIFICATIONS",
+        "com.android.alarm.permission.SET_ALARM",
+        "android.permission.READ_CALENDAR",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.WRITE_CALENDAR"
       ],
       "blockedPermissions": [
+        "android.permission.WRITE_CALENDAR",
         "android.permission.WRITE_CALENDAR"
       ]
     },
@@ -69,6 +82,12 @@
         "projectId": "b52e1ba9-27f3-4992-b177-51130606cbda"
       }
     },
-    "owner": "jypeejypee"
+    "owner": "jypeejypee",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b52e1ba9-27f3-4992-b177-51130606cbda"
+    }
   }
 }

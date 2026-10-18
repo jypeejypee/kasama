@@ -19,6 +19,7 @@
     "expo-speech-recognition": "~57.1.1",
     "expo-splash-screen": "~57.0.10",
     "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.26",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -39,7 +40,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "build:apk": "npx eas-cli@latest build -p android --profile preview",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "update:phone": "npx eas-cli@latest update --channel preview --environment preview --message"
   },
   "private": true
 }

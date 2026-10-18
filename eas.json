@@ -8,10 +8,12 @@
       "android": {
         "buildType": "apk"
       },
-      "environment": "preview"
+      "environment": "preview",
+      "channel": "preview"
     },
     "production": {
-      "environment": "production"
+      "environment": "production",
+      "channel": "production"
     }
   }
 }
