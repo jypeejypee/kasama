@@ -58,13 +58,14 @@ export type Step = { id: string; text: string; done: boolean };
 
 export type Note = { id: string; raw: string; summary: string; ideas: string[]; created_at: string };
 
-export type ProposedTask = Pick<Task, 'title' | 'notes' | 'due_at' | 'duration_min' | 'priority' | 'repeat'>;
+// steps: plain texts from Kasama ("sweep", "mop"); they become Steps when the task is saved
+export type ProposedTask = Pick<Task, 'title' | 'notes' | 'due_at' | 'duration_min' | 'priority' | 'repeat'> & { steps?: string[] };
 
 export type Idea = { id: string; text: string; source: 'dump' | 'chat' | 'manual'; created_at: string; notes?: string | null; steps?: Step[] };
 
-export type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; changes?: string[]; created_at: string };
+export type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; changes?: string[]; failed?: boolean; created_at: string }; // failed: Kasama couldn't answer (offline, limit), so nothing to report
 
-export type ChatAction = { type: 'add' | 'done' | 'drop' | 'move'; task_id: string | null; task: ProposedTask | null; due_at: string | null };
+export type ChatAction = { type: 'add' | 'done' | 'drop' | 'move' | 'steps'; task_id: string | null; task: ProposedTask | null; due_at: string | null; steps?: string[] };
 export type Mood = { date: string; feeling: 'Masaya' | 'Okay lang' | 'Pagod' }; // date: YYYY-MM-DD
 
 export type AlarmRequest = { at: string; label: string }; // at: ISO with offset

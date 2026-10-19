@@ -138,6 +138,7 @@ const TASK_SCHEMA = obj({
   duration_min: { type: 'integer', description: 'Minutes, 5 to 480' },
   priority: { type: 'string', enum: ['high', 'medium', 'low'] },
   repeat: { ...nullable({ type: 'string', enum: ['daily', 'weekly', 'monthly'] }), description: 'Only if they say it repeats, e.g. "every Saturday", "monthly bill"' },
+  steps: { ...strList, description: 'Small steps, only when they list parts of this one task ("clean house: sweep, mop, laundry" → one task with 3 steps). Short, verb-first. Otherwise []' },
 });
 
 function dump(body: { raw: string; now: string; offset: string; settings: Settings }, careful: Careful) {
@@ -145,7 +146,7 @@ function dump(body: { raw: string; now: string; offset: string; settings: Settin
     `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nBRAIN DUMP:\n${String(body.raw).slice(0, 3000)}\n\n` +
       'Summarize what is on their mind in 2-3 sentences, in your own voice as Kasama (reply in English). Pull out every concrete task with a short verb-first title, leaving the date and time out of the title. ' +
       `Turn words like "tomorrow", "sat", "end of month" into real dates; write times as ISO 8601 with offset ${body.offset}. ` +
-      'Estimate duration in minutes. Ideas, plans for someday, feelings and loose thoughts go in ideas (short, one per item), not tasks. ' +
+      'When they list parts of one bigger task (with a colon, "then", or "including"), make it one task with those parts as steps, not separate tasks. Estimate duration in minutes. Ideas, plans for someday, feelings and loose thoughts go in ideas (short, one per item), not tasks. ' +
       'In heads_up, warn about deadlines that clash with fixed blocks or look unrealistic.',
     obj({ summary: str, tasks: { type: 'array', items: TASK_SCHEMA }, ideas: strList, heads_up: strList }),
     { route: 'dump', effort: 'low', settings: body.settings, light: !HEAVY.test(String(body.raw)) && !CRISIS.test(String(body.raw)), crisis: CRISIS.test(String(body.raw)), careful },
@@ -184,7 +185,8 @@ function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; no
       `THEY SAY:\n${String(body.message).slice(0, 1000)}\n\n` +
       'Reply as Kasama, in the same language mix they use (English or Taglish), in 1-4 short sentences. ' +
       'If they ask you to change their tasks, do it with actions instead of only talking about it: ' +
-      'add (fill task), done / drop (task_id from the list), move (task_id plus the new due_at). Leave unused fields null. ' +
+      'add (fill task), done / drop (task_id from the list), move (task_id plus the new due_at), steps (task_id plus the new small steps to add to that task). ' +
+      'Leave unused fields null, and steps [] unless the action is steps. ' +
       `Write dates as ISO 8601 with offset ${body.offset}. Only touch tasks they clearly meant. ` +
       'Put ideas they want to keep for later in ideas. Put lasting facts about them, and how they like to be supported, in remember (short, only new ones). ' +
       'If they ask for an alarm or to be woken up, put it in alarms (at = ISO 8601 with the offset, label = a short reason). ' +
@@ -193,7 +195,7 @@ function chat(body: { message: string; history: ChatTurn[]; tasks: unknown[]; no
       reply: str,
       actions: {
         type: 'array',
-        items: obj({ type: { type: 'string', enum: ['add', 'done', 'drop', 'move'] }, task_id: nullable(str), task: nullable(TASK_SCHEMA), due_at: nullable(str) }),
+        items: obj({ type: { type: 'string', enum: ['add', 'done', 'drop', 'move', 'steps'] }, task_id: nullable(str), task: nullable(TASK_SCHEMA), due_at: nullable(str), steps: strList }),
       },
       ideas: strList,
       remember: strList,
@@ -294,7 +296,8 @@ Deno.serve(async (req) => {
       console.error('usage check failed', usageError);
       return json({ error: 'Something went wrong on my side. Try again in a moment.' }, 500);
     }
-    if (!allowed) return json({ error: "We've talked a lot today. Let's rest and continue tomorrow." }, 429);
+    // The app writes its own gentle message (with the local reset time) for code 'limit'
+    if (!allowed) return json({ error: "We've talked a lot today. Let's continue after the daily reset.", code: 'limit' }, 429);
 
     const body = clean(parsed);
     const careful: Careful = async (limit) => {

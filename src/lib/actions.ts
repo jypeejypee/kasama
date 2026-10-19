@@ -2,9 +2,21 @@ import { addIdeas, getTasks, newId, remember, saveTasks, updateTask } from './st
 import { rescheduleAll } from './notifications';
 import { setAlarms } from './alarm';
 import { endOfDay, fmtDue, fmtTime } from './time';
-import type { ChatResult, DayPlan, Idea, ProposedTask, Repeat, Task } from './types';
+import type { ChatResult, DayPlan, Idea, ProposedTask, Repeat, Step, Task } from './types';
 
 // Every change to tasks goes through here, so reminders always match your list.
+// Reminders are redone in the background: the screen never waits for them.
+
+// One change to the list at a time. Each change reads the saved list, edits it and saves it,
+// so two at once (quick taps on two tasks) would save over each other and bring a task back.
+let line: Promise<unknown> = Promise.resolve();
+function oneAtATime<A extends unknown[], R>(change: (...args: A) => Promise<R>) {
+  return (...args: A): Promise<R> => {
+    const run = line.then(() => change(...args));
+    line = run.catch(() => {});
+    return run;
+  };
+}
 
 const toggling = new Set<string>();
 
@@ -12,12 +24,14 @@ export async function toggleTask(shown: Task) {
   if (toggling.has(shown.id)) return getTasks();
   toggling.add(shown.id);
   try {
-    // The screen's copy may be old (a quick double tap), so use the saved one
-    return await toggleSaved((await getTasks()).find((x) => x.id === shown.id) ?? shown);
+    return await toggleNow(shown);
   } finally {
     toggling.delete(shown.id);
   }
 }
+
+// The screen's copy may be old (a quick double tap), so use the saved one
+const toggleNow = oneAtATime(async (shown: Task) => toggleSaved((await getTasks()).find((x) => x.id === shown.id) ?? shown));
 
 async function toggleSaved(t: Task) {
   const done = t.status !== 'done';
@@ -31,7 +45,7 @@ async function toggleSaved(t: Task) {
     next = next.filter((x) => !(x.from_id === t.id && x.status === 'todo'));
     await saveTasks(next);
   }
-  await rescheduleAll();
+  void rescheduleAll();
   return next;
 }
 
@@ -46,25 +60,34 @@ function nextDue(due: string | null, repeat: Repeat) {
   return d.toISOString();
 }
 
-export async function dropTask(t: Task) {
+async function dropTaskNow(t: Task) {
   const next = await updateTask(t.id, { status: 'dropped' });
-  await rescheduleAll();
+  void rescheduleAll();
   return next;
 }
 
-export async function addTasks(items: ProposedTask[]) {
+// "sweep", "mop" from Kasama → steps you can tick off (blank ones dropped)
+const toSteps = (texts: string[] | undefined): Step[] => (texts ?? []).map((t) => t.trim()).filter(Boolean).map((text) => ({ id: newId(), text, done: false }));
+
+// A task Kasama suggested, ready to save
+function fromProposed({ steps, ...p }: ProposedTask, now: string): Task {
+  const s = toSteps(steps);
+  return { ...p, repeat: p.repeat ?? null, id: newId(), status: 'todo', scheduled_start: null, scheduled_end: null, created_at: now, done_at: null, ...(s.length ? { steps: s } : {}) };
+}
+
+async function addTasksNow(items: ProposedTask[]) {
   const tasks = await getTasks();
   const now = new Date().toISOString();
-  const added: Task[] = items.map((p) => ({ ...p, repeat: p.repeat ?? null, id: newId(), status: 'todo', scheduled_start: null, scheduled_end: null, created_at: now, done_at: null }));
+  const added = items.map((p) => fromProposed(p, now));
   const next = [...tasks, ...added];
   await saveTasks(next);
-  await rescheduleAll();
+  void rescheduleAll();
   return next;
 }
 
 // A new plan replaces the old one: open tasks left out of it lose their old time slot,
 // so a missed slot never lingers on the Today screen.
-export async function applyPlan(plan: DayPlan) {
+async function applyPlanNow(plan: DayPlan) {
   const tasks = await getTasks();
   const slots = new Map(plan.blocks.filter((b) => b.task_id).map((b) => [b.task_id as string, b]));
   const next = tasks.map((t) => {
@@ -73,7 +96,7 @@ export async function applyPlan(plan: DayPlan) {
     return t.status === 'todo' ? { ...t, scheduled_start: null, scheduled_end: null } : t;
   });
   await saveTasks(next);
-  await rescheduleAll();
+  void rescheduleAll();
   return next;
 }
 
@@ -92,7 +115,7 @@ export function describeMoves(before: Task[], after: Task[]) {
 }
 
 // Clears the time slot, and pushes a deadline that is today or already past to tomorrow (same time of day)
-export async function moveToTomorrow(ids: string[]) {
+async function moveToTomorrowNow(ids: string[]) {
   const tasks = await getTasks();
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -106,12 +129,15 @@ export async function moveToTomorrow(ids: string[]) {
     return { ...t, due_at, scheduled_start: null, scheduled_end: null };
   });
   await saveTasks(next);
-  await rescheduleAll();
+  void rescheduleAll();
   return next;
 }
 
+// ", with 3 steps" after "Added Clean house", so the steps aren't a surprise
+export const stepsNote = (steps: string[] | undefined) => { const n = toSteps(steps).length; return n ? `, with ${n} step${n === 1 ? '' : 's'}` : ''; };
+
 // Kasama changes your tasks when you ask in chat. Returns what it did, in plain words.
-export async function applyChatResult(r: ChatResult) {
+async function applyChatResultNow(r: ChatResult) {
   let tasks = await getTasks();
   const changes: string[] = [];
   const find = (id: string | null) => tasks.find((t) => t.id === id && t.status === 'todo');
@@ -120,8 +146,8 @@ export async function applyChatResult(r: ChatResult) {
   for (const a of r.actions) {
     const t = find(a.task_id);
     if (a.type === 'add' && a.task?.title) {
-      tasks = [...tasks, { ...a.task, repeat: a.task.repeat ?? null, id: newId(), status: 'todo', scheduled_start: null, scheduled_end: null, created_at: now, done_at: null }];
-      changes.push(`Added ${a.task.title}${a.task.due_at ? ` (due ${fmtDue(a.task.due_at)})` : ''}`);
+      tasks = [...tasks, fromProposed(a.task, now)];
+      changes.push(`Added ${a.task.title}${a.task.due_at ? ` (due ${fmtDue(a.task.due_at)})` : ''}${stepsNote(a.task.steps)}`);
     } else if (a.type === 'done' && t) {
       tasks = toggleTaskIn(tasks, t);
       changes.push(`Marked ${t.title} done`);
@@ -131,11 +157,15 @@ export async function applyChatResult(r: ChatResult) {
     } else if (a.type === 'move' && t && a.due_at && !isNaN(Date.parse(a.due_at))) {
       tasks = tasks.map((x) => (x.id === t.id ? { ...x, due_at: a.due_at, scheduled_start: null, scheduled_end: null } : x));
       changes.push(`Moved ${t.title} to ${fmtDue(a.due_at)}`);
+    } else if (a.type === 'steps' && t && toSteps(a.steps).length) {
+      const added = toSteps(a.steps);
+      tasks = tasks.map((x) => (x.id === t.id ? { ...x, steps: [...(x.steps ?? []), ...added] } : x));
+      changes.push(`Added ${added.length} step${added.length === 1 ? '' : 's'} to ${t.title}`);
     }
   }
   if (changes.length) {
     await saveTasks(tasks);
-    await rescheduleAll();
+    void rescheduleAll();
   }
   if (r.ideas.length) {
     await addIdeas(r.ideas, 'chat');
@@ -165,8 +195,15 @@ export async function makeTaskFromIdea(idea: Idea) {
 }
 
 // Change one task and keep reminders in step with it
-export async function updateTaskSafely(id: string, patch: Partial<Task>) {
+async function updateTaskSafelyNow(id: string, patch: Partial<Task>) {
   const next = await updateTask(id, patch);
-  await rescheduleAll();
+  void rescheduleAll();
   return next;
 }
+
+export const dropTask = oneAtATime(dropTaskNow);
+export const addTasks = oneAtATime(addTasksNow);
+export const applyPlan = oneAtATime(applyPlanNow);
+export const moveToTomorrow = oneAtATime(moveToTomorrowNow);
+export const applyChatResult = oneAtATime(applyChatResultNow);
+export const updateTaskSafely = oneAtATime(updateTaskSafelyNow);

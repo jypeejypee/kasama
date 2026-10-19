@@ -10,6 +10,7 @@ import { DEFAULT_SETTINGS, eraseEverything, getSettings, getTasks, newId, saveSe
 import { cancelAllReminders, rescheduleAll, sendTestNotification, setupNotifications } from '@/lib/notifications';
 import { toHHMM } from '@/lib/time';
 import { deleteCloudData, DEMO, PRIVACY_URL } from '@/lib/api';
+import { OfflineError } from '@/lib/net';
 import type { Encourage, Faith, FixedBlock, Person, Place, Reminders, Settings, Support } from '@/lib/types';
 import { connectCalendars, type PhoneCalendar } from '@/lib/calendar';
 import { sayHi } from '@/lib/people';
@@ -152,7 +153,8 @@ export default function You() {
       await deleteCloudData();
     } catch (e) {
       // Keep the phone data, so nothing is half-deleted; they can try again
-      Alert.alert("I couldn't reach the backend", `${(e as Error).message} Nothing was deleted. Try again when you're online.`);
+      const why = e instanceof OfflineError ? "You're offline right now." : (e as Error).message;
+      Alert.alert("I couldn't reach the backend", `${why} Nothing was deleted. Try again when you're online.`);
       return;
     }
     await cancelAllReminders();

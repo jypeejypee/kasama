@@ -2,6 +2,7 @@ import { describeNow } from './time';
 import { localCommand, mockChat, mockDump, mockPlan } from './mock';
 import { accessToken, forgetSession, hasSession } from './session';
 import { busyAsBlocks, busyToday } from './calendar';
+import { LimitError, OfflineError, reach } from './net';
 import type { ChatMessage, ChatResult, DayPlan, DumpResult, Settings, Task } from './types';
 
 // The Claude API key never goes inside the app (anyone could pull it out of the APK).
@@ -17,7 +18,7 @@ async function call<T>(action: 'dump' | 'plan' | 'chat' | 'report' | 'delete', p
   // The app secret travels in a header, so never send it over plain http
   if (!URL.startsWith('https://')) throw new Error('EXPO_PUBLIC_ASSISTANT_URL must start with https://');
   const now = describeNow();
-  const send = async () => fetch(URL, {
+  const send = async () => reach(URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-app-secret': SECRET ?? '', Authorization: `Bearer ${await accessToken()}` },
     body: JSON.stringify({ action, now: now.text, offset: now.offset, ...payload }),
@@ -30,6 +31,7 @@ async function call<T>(action: 'dump' | 'plan' | 'chat' | 'report' | 'delete', p
     res = await send();
     body = await res.json().catch(() => ({}));
   }
+  if (res.status === 429 && (body.code === 'limit' || /talked a lot/i.test(body.error ?? ''))) throw new LimitError();
   if (!res.ok) throw new Error(body.error ?? `Assistant error ${res.status}`);
   return body as T;
 }
@@ -64,14 +66,32 @@ const forCloud = ({ people, calendarIds: _ids, bedtime: _bed, aboutMe, ...s }: S
 export const MAX_CHAT_CHARS = 1000;
 export const MAX_DUMP_CHARS = 3000;
 
-export const sortThoughts = (raw: string, settings: Settings) => (DEMO ? mockDump(raw, settings) : call<DumpResult>('dump', { raw, settings: forCloud(settings) }));
+// Offline, or today's talks are used up: simple rules on the phone sort or plan instead, so nothing you said is lost
+const fallback = (e: unknown) => (e instanceof OfflineError ? 'offline' : e instanceof LimitError ? 'limit' : null);
+
+export async function sortThoughts(raw: string, settings: Settings) {
+  if (DEMO) return mockDump(raw, settings);
+  try {
+    return await call<DumpResult>('dump', { raw, settings: forCloud(settings) });
+  } catch (e) {
+    const why = fallback(e);
+    if (!why) throw e;
+    return mockDump(raw, settings, why);
+  }
+}
 
 // Your calendar's busy times join your fixed schedule for today, so tasks never land on a meeting
 export async function planDay(tasks: Task[], settings: Settings) {
   const busy = busyAsBlocks(await busyToday(settings.calendarIds ?? []));
   const withBusy = { ...settings, fixedBlocks: [...settings.fixedBlocks, ...busy] };
   if (DEMO) return mockPlan(tasks, withBusy);
-  return call<DayPlan>('plan', { tasks: openTasks(tasks), settings: forCloud(withBusy) });
+  try {
+    return await call<DayPlan>('plan', { tasks: openTasks(tasks), settings: forCloud(withBusy) });
+  } catch (e) {
+    const why = fallback(e);
+    if (!why) throw e;
+    return mockPlan(tasks, withBusy, why);
+  }
 }
 
 // Your task list rides along with every message, so send only the 30 that matter most right now:

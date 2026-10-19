@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Button } from '@/components/ui';
+import { WhenField } from '@/components/WhenField';
 import { FONT, useColors } from '@/lib/theme';
 import { KEYBOARD_BEHAVIOR } from '@/lib/keyboard';
 import { newId } from '@/lib/storage';
 import type { Step } from '@/lib/types';
 
-export type Details = { title: string; notes: string | null; steps: Step[] };
+export type Details = { title: string; notes: string | null; steps: Step[]; due_at?: string | null };
 
 // "3 of 5 steps" or "has notes", for the line under a task or idea
 export function detailHint(d: { notes?: string | null; steps?: Step[] }) {
@@ -34,7 +35,8 @@ function Sheet({ item, kind, onClose, onSave }: { item: Details; kind: 'task' | 
 
   const close = () => {
     const pending = step.trim() ? [...d.steps, { id: newId(), text: step.trim(), done: false }] : d.steps;
-    onSave({ title: d.title.trim() || item.title, notes: d.notes?.trim() ? d.notes : null, steps: pending.filter((s) => s.text.trim()) });
+    const saved: Details = { title: d.title.trim() || item.title, notes: d.notes?.trim() ? d.notes : null, steps: pending.filter((s) => s.text.trim()) };
+    onSave(kind === 'task' ? { ...saved, due_at: d.due_at ?? null } : saved);
     onClose();
   };
   const addStep = () => {
@@ -51,6 +53,13 @@ function Sheet({ item, kind, onClose, onSave }: { item: Details; kind: 'task' | 
         <View style={[styles.grip, { backgroundColor: c.edge }]} />
         <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 8 }} keyboardShouldPersistTaps="handled">
           <TextInput accessibilityLabel={kind === 'task' ? 'Task name' : 'Idea'} value={d.title} onChangeText={(title) => setD({ ...d, title })} multiline style={{ color: c.text, fontFamily: FONT.title, fontSize: 20, paddingVertical: 4 }} />
+
+          {kind === 'task' && (
+            <>
+              <Text style={[styles.label, { color: c.accent }]}>WHEN</Text>
+              <WhenField value={d.due_at ?? null} onChange={(due_at) => setD({ ...d, due_at })} />
+            </>
+          )}
 
           <Text style={[styles.label, { color: c.accent }]}>NOTES</Text>
           <TextInput
@@ -75,7 +84,15 @@ function Sheet({ item, kind, onClose, onSave }: { item: Details; kind: 'task' | 
               </Pressable>
             </View>
           ))}
-          <TextInput accessibilityLabel="Add a step" value={step} onChangeText={setStep} placeholder="+ Add a small step" placeholderTextColor="#8a9590" onSubmitEditing={addStep} submitBehavior="submit" returnKeyType="done" style={field} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TextInput accessibilityLabel="Add a step" value={step} onChangeText={setStep} placeholder="+ Add a small step" placeholderTextColor="#8a9590" onSubmitEditing={addStep} submitBehavior="submit" returnKeyType="next" style={[field, { flex: 1 }]} />
+            {/* The keyboard's key isn't obvious on every phone, so adding has its own button */}
+            {!!step.trim() && (
+              <Pressable accessibilityRole="button" accessibilityLabel="Add this step" onPress={addStep} hitSlop={8} style={[styles.add, { backgroundColor: c.accent }]}>
+                <Ionicons name="add" size={24} color="#ffffff" />
+              </Pressable>
+            )}
+          </View>
         </ScrollView>
         <Button title="Done" onPress={close} />
       </View>
@@ -89,5 +106,6 @@ const styles = StyleSheet.create({
   grip: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, marginBottom: 6 },
   label: { fontFamily: FONT.strong, fontSize: 12, letterSpacing: 0.8 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
+  add: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
 });

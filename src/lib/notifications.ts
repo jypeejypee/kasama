@@ -48,13 +48,24 @@ export async function setupNotifications(): Promise<boolean> {
 
 const at = (date: Date) => ({ type: lib().SchedulableTriggerInputTypes.DATE, date, channelId: CHANNEL }) as const;
 
+// One run at a time: scheduling is dozens of native calls, and two runs at once would cancel each other's work.
+// Quick changes (ticking off five tasks) share the next run, which reads the latest saved list anyway.
+let queue: Promise<void> = Promise.resolve();
+let waiting = false;
+
 // Reminders must never crash the app (Expo Go and some phones limit notifications), so failures only warn
-export async function rescheduleAll() {
-  try {
-    await scheduleEverything();
-  } catch (e) {
-    console.warn('Kasama could not schedule reminders:', (e as Error).message);
-  }
+export function rescheduleAll(): Promise<void> {
+  if (waiting) return queue;
+  waiting = true;
+  queue = queue.then(async () => {
+    waiting = false;
+    try {
+      await scheduleEverything();
+    } catch (e) {
+      console.warn('Kasama could not schedule reminders:', (e as Error).message);
+    }
+  });
+  return queue;
 }
 
 async function scheduleEverything() {

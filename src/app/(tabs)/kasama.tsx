@@ -9,7 +9,8 @@ import { Drift } from '@/components/Motion';
 import { FONT, useColors } from '@/lib/theme';
 import { useData } from '@/lib/useData';
 import { chat, MAX_CHAT_CHARS, MAX_DUMP_CHARS, reportReply, sortThoughts } from '@/lib/api';
-import { addTasks, applyChatResult } from '@/lib/actions';
+import { LimitError, OfflineError } from '@/lib/net';
+import { addTasks, applyChatResult, stepsNote } from '@/lib/actions';
 import { addIdeas, getAlarms, getChat, getIdeas, getNotes, getSettings, getTasks, newId, saveAlarms, saveChat, saveIdeas, saveNotes, saveSettings, saveTasks } from '@/lib/storage';
 import { rescheduleAll } from '@/lib/notifications';
 import { fmtDue } from '@/lib/time';
@@ -105,7 +106,7 @@ export default function KasamaScreen() {
         const notes = await getNotes();
         await saveNotes([{ id: newId(), raw: message, summary: r.summary, ideas: r.ideas, created_at: new Date().toISOString() }, ...notes].slice(0, 200));
         reply = [r.summary, ...r.heads_up.map((h) => `Heads up: ${h}`)].join('\n\n');
-        changes = [...r.tasks.map((t) => `Added ${t.title}${t.due_at ? `, by ${fmtDue(t.due_at)}` : ''}`), ...r.ideas.map((i) => `Kept your idea: ${i}`)];
+        changes = [...r.tasks.map((t) => `Added ${t.title}${t.due_at ? `, by ${fmtDue(t.due_at)}` : ''}${stepsNote(t.steps)}`), ...r.ideas.map((i) => `Kept your idea: ${i}`)];
       } else {
         const r = await chat(message, history, tasks, fresh);
         const applied = await applyChatResult(r);
@@ -117,7 +118,9 @@ export default function KasamaScreen() {
       setSnap(changes.length ? before : null);
       next = [...next, { id: replyId, role: 'assistant', text: reply, changes, created_at: new Date().toISOString() }];
     } catch (e) {
-      next = [...next, { id: replyId, role: 'assistant', text: `Sorry, I couldn't reach my brain just now. ${(e as Error).message}`, created_at: new Date().toISOString() }];
+      // Offline and daily-limit messages are already written for you; anything else is a problem on Kasama's side
+      const text = e instanceof OfflineError || e instanceof LimitError ? e.message : `Sorry, something went wrong on my side. ${(e as Error).message}`;
+      next = [...next, { id: replyId, role: 'assistant', text, failed: true, created_at: new Date().toISOString() }];
     } finally {
       setMessages(next);
       await saveChat(next);
@@ -217,9 +220,11 @@ export default function KasamaScreen() {
                   <Text style={{ color: c.text, fontFamily: FONT.bold, fontSize: 14 }}>Undo</Text>
                 </Pressable>
               )}
-              <Pressable accessibilityRole="button" accessibilityLabel="Report this reply" disabled={reported.has(m.id)} onPress={() => askReport(m)} hitSlop={10} style={{ alignSelf: 'flex-start', marginLeft: 24, paddingVertical: 2 }}>
-                <Text style={{ color: c.muted, fontSize: 12, fontFamily: FONT.semi }}>{reported.has(m.id) ? 'Reported. Thank you.' : 'Report'}</Text>
-              </Pressable>
+              {!m.failed && (
+                <Pressable accessibilityRole="button" accessibilityLabel="Report this reply" disabled={reported.has(m.id)} onPress={() => askReport(m)} hitSlop={10} style={{ alignSelf: 'flex-start', marginLeft: 24, paddingVertical: 2 }}>
+                  <Text style={{ color: c.muted, fontSize: 12, fontFamily: FONT.semi }}>{reported.has(m.id) ? 'Reported. Thank you.' : 'Report'}</Text>
+                </Pressable>
+              )}
             </View>
           );
         }}

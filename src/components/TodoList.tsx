@@ -3,6 +3,7 @@ import { TextInput, View } from 'react-native';
 import { Button, Chip, H, Muted } from '@/components/ui';
 import { TaskRow } from '@/components/TaskRow';
 import { DetailSheet } from '@/components/DetailSheet';
+import { WhenField } from '@/components/WhenField';
 import { FONT, useColors } from '@/lib/theme';
 import { addTasks, dropTask, toggleTask, updateTaskSafely } from '@/lib/actions';
 import { endOfDay } from '@/lib/time';
@@ -23,15 +24,17 @@ export function TodoList({ tasks, setTasks }: { tasks: Task[]; setTasks: (t: Tas
   const c = useColors();
   const [title, setTitle] = useState('');
   const [repeat, setRepeat] = useState<Repeat | null>(null);
+  const [due, setDue] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const open = tasks.filter((t) => t.status === 'todo');
   const opened = tasks.find((t) => t.id === openId);
 
   async function quickAdd() {
     if (!title.trim()) return;
-    setTasks(await addTasks([{ title: title.trim(), notes: null, due_at: null, duration_min: 30, priority: 'medium', repeat }]));
+    setTasks(await addTasks([{ title: title.trim(), notes: null, due_at: due, duration_min: 30, priority: 'medium', repeat }]));
     setTitle('');
     setRepeat(null);
+    setDue(null);
   }
 
   return (
@@ -48,6 +51,7 @@ export function TodoList({ tasks, setTasks }: { tasks: Task[]; setTasks: (t: Tas
       />
       {!!title.trim() && (
         <View style={{ gap: 10, marginTop: 6 }}>
+          <WhenField value={due} onChange={setDue} />
           <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
             {([null, 'daily', 'weekly', 'monthly'] as (Repeat | null)[]).map((r) => (
               <Chip key={r ?? 'once'} label={r ? `every ${r === 'daily' ? 'day' : r.replace('ly', '')}` : 'just once'} active={repeat === r} onPress={() => setRepeat(r)} />
@@ -65,7 +69,7 @@ export function TodoList({ tasks, setTasks }: { tasks: Task[]; setTasks: (t: Tas
       ))}
       <DetailSheet
         kind="task"
-        item={opened ? { title: opened.title, notes: opened.notes, steps: opened.steps ?? [] } : null}
+        item={opened ? { title: opened.title, notes: opened.notes, steps: opened.steps ?? [], due_at: opened.due_at } : null}
         onClose={() => setOpenId(null)}
         onSave={async (d) => { if (opened) setTasks(await updateTaskSafely(opened.id, d)); }}
       />

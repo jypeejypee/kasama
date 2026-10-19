@@ -32,7 +32,7 @@ export function CalendarView({ tasks, setTasks, settings }: { tasks: Task[]; set
   const today = midnight(new Date());
   const [day, setDay] = useState(today);
   const [week, setWeek] = useState(0); // weeks (or months, in month view) away from now
-  const [mode, setMode] = useState<'week' | 'month'>('week');
+  const [mode, setMode] = useState<'week' | 'month'>('month');
   const [events, setEvents] = useState<PhoneEvent[]>([]);
   const [connected, setConnected] = useState<string[] | null>(null); // set right after connecting here
   const ids = connected ?? settings.calendarIds ?? [];

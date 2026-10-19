@@ -6,6 +6,19 @@ import type { ChatResult, DayPlan, DumpResult, Priority, ProposedTask, Repeat, S
 // automatically once EXPO_PUBLIC_ASSISTANT_URL is set.
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// The same rules also step in when the real Kasama can't answer: offline, or today's talks are used up
+export type Why = 'demo' | 'offline' | 'limit';
+const SORTED: Record<Why, string> = {
+  demo: '(Demo mode: sorted with simple rules, not Claude.)',
+  offline: "You're offline, so I sorted this with simple rules on the phone. Check the dates.",
+  limit: "We've used up today's talks, so I sorted this with simple rules on the phone. Check the dates.",
+};
+const PLANNED: Record<Why, string> = {
+  demo: '(Demo mode)',
+  offline: "You're offline, so this is a simple plan made on the phone.",
+  limit: "We've used up today's talks, so this is a simple plan made on the phone.",
+};
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 // "sat", "saturday", "thurs"… but not the "mon" in "month"
 const WEEKDAY = '(sun|mon|tues?|wed(?:nes)?|thu(?:rs?)?|fri|sat(?:ur)?)(?:day)?';
@@ -105,7 +118,7 @@ function blocksOn(d: Date, settings: Settings) {
     });
 }
 
-export async function mockDump(raw: string, settings: Settings): Promise<DumpResult> {
+export async function mockDump(raw: string, settings: Settings, why: Why = 'demo'): Promise<DumpResult> {
   await wait(700);
   const chunks = raw.split(/[,;\n]+|\s+and\s+(?=[a-z])/i).map((c) => c.trim()).filter((c) => c.length > 2);
   const ideas: string[] = [];
@@ -121,15 +134,15 @@ export async function mockDump(raw: string, settings: Settings): Promise<DumpRes
     return clash ? [`${t.title} is due during ${clash.label}. Do it before then.`] : [];
   });
   const summary = tasks.length
-    ? `You have ${tasks.length} thing${tasks.length === 1 ? '' : 's'} to do${ideas.length ? ` and ${ideas.length} thought${ideas.length === 1 ? '' : 's'} on your mind` : ''}. (Demo mode: sorted with simple rules, not Claude.)`
-    : 'No clear tasks found, but your thoughts are saved. (Demo mode)';
+    ? `You have ${tasks.length} thing${tasks.length === 1 ? '' : 's'} to do${ideas.length ? ` and ${ideas.length} thought${ideas.length === 1 ? '' : 's'} on your mind` : ''}. ${SORTED[why]}`
+    : `No clear tasks found, but your thoughts are saved. ${why === 'demo' ? '(Demo mode)' : SORTED[why]}`;
   return { summary, tasks, ideas, heads_up };
 }
 
 const rank = { high: 0, medium: 1, low: 2 } as const;
 const byUrgency = (a: Task, b: Task) => rank[a.priority] - rank[b.priority] || (a.due_at ?? '9').localeCompare(b.due_at ?? '9');
 
-export async function mockPlan(tasks: Task[], settings: Settings): Promise<DayPlan> {
+export async function mockPlan(tasks: Task[], settings: Settings, why: Why = 'demo'): Promise<DayPlan> {
   await wait(700);
   const now = new Date();
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 0);
@@ -156,8 +169,8 @@ export async function mockPlan(tasks: Task[], settings: Settings): Promise<DayPl
     cursor = new Date(slotEnd.getTime() + 10 * 60 * 1000); // 10-minute break
   }
   const message = blocks.length
-    ? `I fit ${blocks.length} task${blocks.length === 1 ? '' : 's'} into the rest of today, most urgent first. Kaya mo 'to! (Demo mode)`
-    : 'There is no free time left today. Rest, and plan again tomorrow. (Demo mode)';
+    ? `I fit ${blocks.length} task${blocks.length === 1 ? '' : 's'} into the rest of today, most urgent first. Kaya mo 'to! ${PLANNED[why]}`
+    : `There is no free time left today. Rest, and plan again tomorrow. ${PLANNED[why]}`;
   return { message, blocks, not_today };
 }
 

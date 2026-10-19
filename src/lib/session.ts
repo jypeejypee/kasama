@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { OfflineError, reach } from './net';
 
 // Each phone signs in to Supabase anonymously (no email, no password), once.
 // The backend uses that sign-in to give every phone its own daily limit, so nobody can drain the Claude credit.
@@ -10,7 +11,7 @@ const BASE = (process.env.EXPO_PUBLIC_ASSISTANT_URL ?? '').replace(/\/functions\
 type Session = { access_token: string; refresh_token: string; expires_at: number };
 
 async function authCall(path: string, body: Record<string, unknown>): Promise<Session> {
-  const res = await fetch(`${BASE}/auth/v1/${path}`, {
+  const res = await reach(`${BASE}/auth/v1/${path}`, {
     method: 'POST',
     headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -37,8 +38,9 @@ async function fresh(): Promise<string> {
   if (saved?.refresh_token) {
     try {
       return (await authCall('token?grant_type=refresh_token', { refresh_token: saved.refresh_token })).access_token;
-    } catch {
-      // Refresh token no longer valid: sign in again below
+    } catch (e) {
+      // Offline: keep this sign-in for later. Otherwise the refresh token is no longer valid, so sign in again below.
+      if (e instanceof OfflineError) throw e;
     }
   }
   return (await authCall('signup', {})).access_token;

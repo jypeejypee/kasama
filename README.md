@@ -201,7 +201,7 @@ The bottom bar: **Home · Things · (Kasama) · Journey · You**.
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY is missing` | Add the anon key to `.env` (step 4), then `npx expo start --clear`. |
 | `Anonymous sign-ins are disabled` | Turn on Anonymous Sign-Ins in Supabase (step 3.5). |
 | `Something went wrong on my side` right after updating | Run the usage SQL (step 3.5) and redeploy the function. The Supabase logs show the exact error. |
-| `We've talked a lot today` | The daily limit was reached. It resets at midnight UTC (8 AM Manila). Raise `DAILY_LIMIT` if you need more. |
+| `Ang dami na nating napag-usapan ngayon…` | The daily limit was reached. It resets at midnight UTC (8 AM Manila). Raise `DAILY_LIMIT` if you need more. Brain dumps and Plan my day still work with simple on-phone rules until then. |
 | `Wrong app secret` | `EXPO_PUBLIC_APP_SECRET` in `.env` must equal `APP_SECRET` in Supabase. |
 | `401 Missing authorization header` | "Verify JWT" is still on for the function. Turn it off (step 3). |
 | `Claude error 404` / model error | Update the `CLAUDE_MODEL` secret to a current model name, e.g. `claude-sonnet-5-5`. |
