@@ -79,3 +79,7 @@ export type DayPlan = {
   blocks: { task_id: string | null; title: string; start: string; end: string }[];
   not_today: string[];
 };
+
+// The buddy on Home (testers only): which one, or none, and where you last put him
+export type BuddyPick = 'poring' | 'dino' | 'none';
+export type BuddyState = { pick: BuddyPick; x?: number; y?: number };

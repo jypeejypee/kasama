@@ -11,6 +11,8 @@ import { cancelAllReminders, rescheduleAll, sendTestNotification, setupNotificat
 import { toHHMM } from '@/lib/time';
 import { deleteCloudData, DEMO, PRIVACY_URL } from '@/lib/api';
 import { OfflineError } from '@/lib/net';
+import { TESTER } from '@/lib/tester';
+import { BuddyPicker } from '@/components/Buddy';
 import type { Encourage, Faith, FixedBlock, Person, Place, Reminders, Settings, Support } from '@/lib/types';
 import { connectCalendars, type PhoneCalendar } from '@/lib/calendar';
 import { sayHi } from '@/lib/people';
@@ -168,6 +170,7 @@ export default function You() {
     <ScrollView style={{ backgroundColor: c.sky }} contentContainerStyle={{ paddingTop: insets.top + 18, paddingHorizontal: 24, paddingBottom: 130, gap: 10 }} keyboardShouldPersistTaps="handled">
       <Title size={24}>You</Title>
       <Muted>Make me yours. Change anything, anytime. I&apos;ll learn the rest as we talk.</Muted>
+      {TESTER && <BuddyPicker />}
 
       <H>Where do you feel calm?</H>
       {PLACES.map(([p, name, line]) => {

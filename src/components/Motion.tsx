@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing } from 'react-native';
 
 // Slow, calm motion, at the pace of breathing. Turned off when the phone asks for reduced motion.
-function useReduceMotion() {
+export function useReduceMotion() {
   const [reduce, setReduce] = useState(false);
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduce).catch(() => {});

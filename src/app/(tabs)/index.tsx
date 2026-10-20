@@ -7,6 +7,7 @@ import { Button, DemoBadge, H, Muted, Say, Title } from '@/components/ui';
 import { Scene } from '@/components/Scene';
 import { TaskRow } from '@/components/TaskRow';
 import { CheckIn } from '@/components/CheckIn';
+import { Buddy } from '@/components/Buddy';
 import { FONT, useColors } from '@/lib/theme';
 import { useData } from '@/lib/useData';
 import { endOfDay, fmtDue, fmtTime, isToday, parseHHMM } from '@/lib/time';
@@ -17,6 +18,7 @@ import { nudgeFor, sayHi } from '@/lib/people';
 import { getSettings, saveSettings } from '@/lib/storage';
 import type { Task } from '@/lib/types';
 import { asleepAt } from '@/lib/sleep';
+import { TESTER } from '@/lib/tester';
 
 const rank = { high: 0, medium: 1, low: 2 } as const;
 // The open tasks, as one short key, to know whether the list changed since Kasama spoke
@@ -110,6 +112,7 @@ export default function Home() {
         : mode === 'morning' ? "Today's path is short:" : "Here's what's next.";
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView style={{ backgroundColor: c.ground }} contentContainerStyle={{ paddingBottom: 130 }}>
       <View>
         <Scene height={240 + insets.top} time={mode === 'morning' ? 'dawn' : 'day'} />
@@ -178,6 +181,9 @@ export default function Home() {
         {mode === 'night' && <Button title="Back to tonight's check-in" variant="link" onPress={() => setShowDay(false)} />}
       </View>
     </ScrollView>
+    {/* Testers get a little buddy on Home */}
+    {TESTER && <Buddy />}
+    </View>
   );
 }
 
