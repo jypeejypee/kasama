@@ -62,6 +62,19 @@ const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.g
 export const busyAsBlocks = (busy: Busy[]): FixedBlock[] =>
   busy.map((b, i) => ({ id: `cal-${i}`, label: 'Busy (calendar)', days: [b.start.getDay()], start: hhmm(b.start), end: b.end > endOfDay() ? '23:59' : hhmm(b.end) }));
 
+// Your phone calendar's events in a stretch of days, for the evening-before heads-up.
+// Names go into a notification on this phone only, never anywhere else.
+export async function eventsBetween(calendarIds: string[], start: Date, end: Date): Promise<{ title: string; start: Date; allDay: boolean }[]> {
+  if (!Cal || calendarIds.length === 0) return [];
+  try {
+    if (!(await Cal.getCalendarPermissions()).granted) return [];
+    const events = await Cal.listEvents(calendarIds, start, end);
+    return events.map((e) => ({ title: e.title || 'Event', start: new Date(e.startDate), allDay: !!e.allDay }));
+  } catch {
+    return [];
+  }
+}
+
 // Your phone calendar's events for one day, for the calendar view only.
 // Names are shown on this phone and never sent anywhere.
 export type PhoneEvent = { id: string; title: string; start: Date; end: Date; allDay: boolean; color?: string };

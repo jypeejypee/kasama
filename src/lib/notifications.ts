@@ -3,7 +3,8 @@ import type * as NotificationsLib from 'expo-notifications';
 import { addLateNight, getAlarms, getSettings, getTasks } from './storage';
 import { dayKey, endOfDay, fmtTime, isToday, parseHHMM } from './time';
 import { asleepAt, pastBedtime, sleepBlock, stillUpText } from './sleep';
-import type { Task } from './types';
+import { eventsBetween } from './calendar';
+import type { Settings, Task } from './types';
 
 // Reminders are scheduled ON THE PHONE (local notifications). They fire even with no
 // internet and with the app closed. Every time your tasks change, we cancel everything
@@ -101,6 +102,8 @@ async function scheduleEverything() {
       if (followUp.getTime() > now) items.push({ when: followUp, title: `Did you finish ${t.title}?`, body: "If not, open Kasama and I'll fix the rest of your day.", url: '/' });
     }
   }
+  // The evening before a day with something on it: one gentle heads-up about tomorrow
+  if (level !== 'quiet') items.push(...(await headsUps(open, settings)).filter((h) => h.when.getTime() > now));
   // Alarms you asked for always ring, whatever the reminder level, and come first
   const alarms = (await getAlarms()).slice(0, 10);
   for (const a of alarms) {
@@ -157,6 +160,53 @@ async function scheduleBedtime(settings: Awaited<ReturnType<typeof getSettings>>
   return count;
 }
 
+
+// "Bukas": the evening before, what's coming tomorrow, so nothing catches you by surprise.
+// To-dos due that day, plus your phone calendar's events if you connected it (their names stay on the phone).
+// Daily repeats are left out; they would be the same note every night.
+const HEADS_UP_HOUR = 19; // 7:00 PM the day before
+const HEADS_UP_DAYS = 14; // looks this far ahead
+type HeadsUp = { day: string; when: Date; title: string; body: string };
+
+async function headsUps(open: Task[], settings: Settings): Promise<HeadsUp[]> {
+  const now = new Date();
+  const until = new Date(now.getFullYear(), now.getMonth(), now.getDate() + HEADS_UP_DAYS + 1);
+  const byDay = new Map<string, { at: Date; label: string }[]>();
+  const add = (at: Date, label: string) => byDay.set(dayKey(at), [...(byDay.get(dayKey(at)) ?? []), { at, label }]);
+  for (const t of open) {
+    if (!t.due_at || t.repeat === 'daily') continue;
+    const due = new Date(t.due_at);
+    if (due > now && due < until) add(due, `${t.title} by ${fmtTime(t.due_at)}`);
+  }
+  for (const e of await eventsBetween(settings.calendarIds ?? [], now, until)) {
+    add(e.start, e.allDay ? e.title : `${e.title} at ${fmtTime(e.start.toISOString())}`);
+  }
+  return [...byDay.entries()].map(([day, list]) => {
+    list.sort((a, b) => a.at.getTime() - b.at.getTime());
+    const d = list[0].at;
+    let when = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, HEADS_UP_HOUR);
+    if (asleepAt(settings, when)) when = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, 12); // night shift: noon instead
+    const more = list.length > 3 ? ` · and ${list.length - 3} more` : '';
+    return list.length === 1
+      ? { day, when, title: `Bukas: ${list[0].label}`, body: 'Just a heads-up, para ready ka. Open Kasama to plan it.' }
+      : { day, when, title: `Bukas: ${list.length} things coming`, body: list.slice(0, 3).map((x) => x.label).join(' · ') + more };
+  });
+}
+
+// Testers: see tomorrow's heads-up now (in 5 seconds) instead of waiting for the evening.
+// With nothing due tomorrow, a sample shows what it looks like.
+export async function previewHeadsUp(): Promise<'tomorrow' | 'sample'> {
+  const [tasks, settings] = await Promise.all([getTasks(), getSettings()]);
+  const d = new Date();
+  const tomorrow = dayKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1));
+  const real = (await headsUps(tasks.filter((t) => t.status === 'todo'), settings)).find((h) => h.day === tomorrow);
+  const note = real ?? { title: 'Bukas: Haircut by 5:00 PM', body: 'Just a heads-up, para ready ka. Open Kasama to plan it.' };
+  await lib().scheduleNotificationAsync({
+    content: { title: note.title, body: note.body, data: { url: '/' } },
+    trigger: { type: lib().SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5, channelId: CHANNEL },
+  });
+  return real ? 'tomorrow' : 'sample';
+}
 
 function checkInText(open: Task[]) {
   const left = open.filter((t) => isToday(t.scheduled_start) || (t.due_at && new Date(t.due_at) <= endOfDay())).length;

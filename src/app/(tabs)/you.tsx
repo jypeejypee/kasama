@@ -7,7 +7,7 @@ import { KEYBOARD_BEHAVIOR } from '@/lib/keyboard';
 import { Button, Chip, DemoBadge, H, Muted, Title } from '@/components/ui';
 import { FONT, setPlace, useColors } from '@/lib/theme';
 import { DEFAULT_SETTINGS, eraseEverything, getSettings, getTasks, newId, saveSettings, saveTasks } from '@/lib/storage';
-import { cancelAllReminders, rescheduleAll, sendTestNotification, setupNotifications } from '@/lib/notifications';
+import { cancelAllReminders, previewHeadsUp, rescheduleAll, sendTestNotification, setupNotifications } from '@/lib/notifications';
 import { toHHMM } from '@/lib/time';
 import { deleteCloudData, DEMO, PRIVACY_URL } from '@/lib/api';
 import { OfflineError } from '@/lib/net';
@@ -132,6 +132,18 @@ export default function You() {
     }
   }
 
+  // Testers: see the evening-before heads-up now instead of waiting for 7 PM
+  async function previewTomorrow() {
+    const ok = await setupNotifications();
+    if (!ok) return setMsg('Notifications are off. Turn them on for Kasama in your phone settings.');
+    try {
+      const what = await previewHeadsUp();
+      setMsg(what === 'tomorrow' ? "Tomorrow's heads-up will appear in 5 seconds." : 'Nothing is due tomorrow, so a sample heads-up will appear in 5 seconds.');
+    } catch {
+      setMsg("This phone or Expo Go couldn't send it. The installed app can.");
+    }
+  }
+
   async function clearDone() {
     const tasks = await getTasks();
     await saveTasks(tasks.filter((t) => t.status === 'todo'));
@@ -227,6 +239,7 @@ export default function You() {
         return <Button title={`Match my sleep: hello at ${prettyTime(t.morningDigest)}, check-in at ${prettyTime(t.eveningReview)}`} variant="link" onPress={() => setS({ ...s, ...t })} />;
       })()}
       <Button title="Send a test notification" variant="link" onPress={test} />
+      {TESTER && <Button title="Preview tomorrow's heads-up" variant="link" onPress={previewTomorrow} />}
 
       <H>What I know about you</H>
       <Muted>I read this every time I plan or answer. I add to it when you tell me things, and you can change anything here.</Muted>
