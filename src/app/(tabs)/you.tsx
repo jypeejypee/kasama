@@ -210,6 +210,16 @@ export default function You() {
       <H>Faith (only if you want)</H>
       <View style={styles.wrap}>{FAITH.map(([v, label]) => <Chip key={v} label={label} active={(s.faith ?? 'none') === v} onPress={() => setS({ ...s, faith: v })} />)}</View>
       {s.faith === 'other' && <TextInput accessibilityLabel="Your faith" value={s.faithOther ?? ''} onChangeText={(v) => setS({ ...s, faithOther: v })} style={field} placeholder="Write your faith in your own words" placeholderTextColor="#8a9590" />}
+      {/* Testers' buddy: how often a calm faith line comes up among his everyday words */}
+      {TESTER && (s.faith === 'christian' || s.faith === 'spiritual') && (
+        <>
+          <Muted>In your buddy&apos;s words, gently mixed with everyday encouragement:</Muted>
+          <View style={styles.wrap}>
+            <Chip label="A little" active={(s.faithAmount ?? 'little') === 'little'} onPress={() => setS({ ...s, faithAmount: 'little' })} />
+            <Chip label="More" active={s.faithAmount === 'more'} onPress={() => setS({ ...s, faithAmount: 'more' })} />
+          </View>
+        </>
+      )}
 
       <H>How often should I tap your shoulder?</H>
       <View style={styles.wrap}>{REMINDERS.map(([v, label]) => <Chip key={v} label={label} active={(s.reminders ?? 'calm') === v} onPress={() => setS({ ...s, reminders: v })} />)}</View>

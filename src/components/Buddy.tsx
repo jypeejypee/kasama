@@ -6,8 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { H } from '@/components/ui';
 import { useReduceMotion } from '@/components/Motion';
 import { FONT, useColors } from '@/lib/theme';
-import { getBuddy, saveBuddy } from '@/lib/storage';
-import { todaysLines } from '@/lib/buddyLines';
+import { getBuddy, getMoods, getSettings, saveBuddy } from '@/lib/storage';
+import { todaysLines, type LineContext } from '@/lib/buddyLines';
+import { dayKey } from '@/lib/time';
 import type { BuddyPick, BuddyState } from '@/lib/types';
 
 // A little friend on Home (testers only). He hops in the corner and says something kind when you tap him.
@@ -216,6 +217,7 @@ export function Buddy() {
   const anim = useRef<Animated.CompositeAnimation | null>(null);
   const timers = useRef<{ face?: ReturnType<typeof setTimeout>; line?: ReturnType<typeof setTimeout>; sleep?: ReturnType<typeof setTimeout>; rest?: ReturnType<typeof setTimeout> }>({});
   const lines = useRef({ list: todaysLines(), i: 0 });
+  const context = useRef<LineContext>({}); // your faith choice and last night's check-in, read each time Home opens
   const taps = useRef<number[]>([]);
   const drag = useRef({ on: false, over: false, x: 0, y: 0, px: 0, py: 0 }); // px, py: where the finger went down
 
@@ -262,7 +264,7 @@ export function Buddy() {
   const speak = (text?: string) => {
     if (!text) {
       // Today's lines in order, the day's special one first; a new day brings a new set
-      const fresh = todaysLines();
+      const fresh = todaysLines(new Date(), context.current);
       if (fresh.join() !== lines.current.list.join()) lines.current = { list: fresh, i: 0 };
       text = lines.current.list[lines.current.i % lines.current.list.length];
       lines.current.i += 1;
@@ -376,7 +378,14 @@ export function Buddy() {
   useFocusEffect(
     useCallback(() => {
       let alive = true;
-      getBuddy().then((b) => { if (alive) { setSaved(b); setVisit((v) => v + 1); } });
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      Promise.all([getBuddy(), getSettings(), getMoods()]).then(([b, s, moods]) => {
+        if (!alive) return;
+        context.current = { faith: s.faith, amount: s.faithAmount, tiredYesterday: moods.some((m) => m.date === dayKey(y) && m.feeling === 'Pagod') };
+        setSaved(b);
+        setVisit((v) => v + 1);
+      });
       return () => {
         alive = false;
         anim.current?.stop();

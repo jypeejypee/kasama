@@ -90,17 +90,75 @@ function seeded(seed: number) {
   };
 }
 
-export function todaysLines(now = new Date()) {
+// Faith, for those who chose it in You. Kasama is a resting place: these are calm invitations and comfort,
+// never guilt or pressure. Verses are quoted exactly (NKJV) with their reference.
+// Only Christian and Spiritual get faith lines; Other and None keep the everyday words.
+type FaithKind = 'christian' | 'spiritual';
+const FAITH_LINES: Record<FaithKind, { lines: string[]; morning: string; night: string; tired: string }> = {
+  christian: {
+    lines: [
+      'Pray tayo saglit? Kahit isang minuto lang.',
+      "Ipagdasal natin 'tong araw mo.",
+      'Hindi ka nag-iisa. Kasama mo Siya.',
+      'Salamat, Lord, sa bagong araw.',
+      'Ipahinga mo muna kay Lord ang bigat.',
+      'Kahit pagod, may biyaya pa rin ngayong araw.',
+      '"Be still, and know that I am God." (Psalm 46:10)',
+      '"I can do all things through Christ who strengthens me." (Philippians 4:13)',
+      '"Casting all your care upon Him, for He cares for you." (1 Peter 5:7)',
+      '"The Lord is my shepherd; I shall not want." (Psalm 23:1)',
+      '"This is the day the Lord has made; we will rejoice and be glad in it." (Psalm 118:24)',
+    ],
+    morning: 'Devotion muna tayo bago magsimula?',
+    night: 'Ipagdasal natin ang bukas. Pahinga ka na.',
+    tired: '"Come to Me, all you who labor and are heavy laden, and I will give you rest." (Matthew 11:28)',
+  },
+  spiritual: {
+    lines: [
+      'Huminga muna. Ano ang ipinagpapasalamat mo ngayon?',
+      'Sandaling katahimikan bago ang lahat.',
+      'Isang malalim na hininga. Nandito ka, sapat na yun.',
+      'Pansinin mo ang isang magandang bagay ngayon.',
+      'Dahan-dahan. Hindi kailangang magmadali ang puso.',
+    ],
+    morning: 'Magandang umaga. Isang sandali ng pasasalamat muna?',
+    night: "Bitawan na natin ang araw na 'to. Pahinga na.",
+    tired: 'Pagod ka kahapon. Dahan-dahan lang tayo ngayon.',
+  },
+};
+
+// What shapes today's words: the faith they chose, how much of it ("a little" is about 1 in 3, "more" is half),
+// and whether last night's check-in said "Pagod"
+export type LineContext = { faith?: string; amount?: 'little' | 'more'; tiredYesterday?: boolean };
+
+export function todaysLines(now = new Date(), ctx: LineContext = {}) {
   const h = now.getHours();
   const timely = h < 11 ? MORNING : h < 17 ? AFTERNOON : h < 21 ? EVENING : NIGHT;
   const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 864e5);
   const rand = seeded(now.getFullYear() * 1000 + dayOfYear);
-  const pool = ANYTIME.slice();
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  const today = [...pool.slice(0, 7), timely[Math.floor(rand() * timely.length)]];
-  const s = special(now);
-  return s ? [s, ...today] : today;
+  const shuffle = (list: string[]) => {
+    const pool = list.slice();
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool;
+  };
+  const today = [...shuffle(ANYTIME).slice(0, 7), timely[Math.floor(rand() * timely.length)]];
+  const faith = ctx.faith && ctx.faith in FAITH_LINES ? FAITH_LINES[ctx.faith as FaithKind] : null;
+  const sunday = now.getDay() === 0 && ctx.faith === 'christian';
+  const s = sunday ? 'Linggo. Simba o pahinga kasama Siya?' : special(now);
+  if (!faith) return s ? [s, ...today] : today;
+
+  // Faith woven in: every 3rd line (a little) or every 2nd (more), from today's own shuffle
+  const everyday = ctx.amount === 'more' ? 1 : 2; // everyday lines before each faith line
+  const quiet = shuffle(faith.lines);
+  const mixed: string[] = [];
+  today.forEach((line, i) => {
+    mixed.push(line);
+    if ((i + 1) % everyday === 0 && quiet.length) mixed.push(quiet.shift()!);
+  });
+  // The first words of the day: comfort after a tiring yesterday, an invitation in the morning, rest at night
+  const opener = ctx.tiredYesterday && h < 11 ? faith.tired : h < 11 ? faith.morning : h >= 21 ? faith.night : null;
+  return [...(opener ? [opener] : []), ...(s ? [s] : []), ...mixed];
 }

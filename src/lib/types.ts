@@ -31,6 +31,7 @@ export type Settings = {
   encourage?: Encourage;
   support?: Support;
   faith?: Faith;
+  faithAmount?: 'little' | 'more'; // how often faith lines come up in the buddy's words, default 'little' (about 1 in 3)
   faithOther?: string; // their own words when faith is 'other'
 };
 
