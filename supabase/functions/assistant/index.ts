@@ -18,7 +18,7 @@ const LIGHT_MODEL = Deno.env.get('CLAUDE_LIGHT_MODEL') ?? 'claude-haiku-5-5';
 // Feelings, stress or anything that may be serious always gets the careful model
 // Someone in danger gets the careful model even past today's limit (up to CRISIS_EXTRA more)
 const CRISIS = /\b(die|mamatay|patay|suicide|kill|self.?harm|ayoko na|wala nang|di ko na kaya|hindi ko na kaya|give up|suko)\b/i;
-const HEAVY = /\b(pagod|tired|exhausted|sad\b|lungkot|malungkot|iyak|cry|crying|stress|anxious|anxiety|kaba|takot|scared|afraid|lonely|alone|mag-isa|depress|hopeless|worthless|overwhelm|panic|hurt|sakit|help me|tulong)/i;
+const HEAVY = /\b(pagod|tired|exhausted|sad\b|lungkot|malungkot|iyak|cry|crying|stress|anxious|anxiety|kaba|takot|scared|afraid|lonely|alone|mag-isa|depress|hopeless|worthless|overwhelm|panic|hurt|sakit|help me|tulong|nakakainis|naiinis|inis|badtrip|bad trip|ang hirap|mahirap|hirap na|puyat|burnout|burned out|burnt out|galit|frustrat|nalulungkot|nag-aalala|worried|ayaw ko na|bigat|mabigat|drained|ubos)/i;
 // Supabase gives every Edge Function these two automatically
 const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } });
 // Testing-phase limits; raise them in Supabase secrets when you're ready
@@ -44,7 +44,7 @@ const ENCOURAGE: Record<Encourage, string> = {
   cheer: 'They like being motivated. Be warm and upbeat, celebrate real progress, and give a gentle nudge toward the next small step.',
 };
 const SUPPORT: Record<Support, string> = {
-  ask: 'When they share something hard, first ask whether they want you to just listen or help figure it out, unless their memory already says which.',
+  ask: 'When they share something hard without saying what they need, first ask whether they want you to just listen or help figure it out, unless their memory already says which. If they asked for advice or help, that is their answer: give it.',
   listen: 'When they share something hard, listen first: reflect what they feel and give no advice unless they ask for it.',
   advise: 'When they share something hard, acknowledge it briefly, then offer one or two practical options.',
 };
@@ -71,10 +71,16 @@ function persona(s: Settings) {
     'How you talk:\n' +
       '- You are a friend, not a coach. Offer choices. Never pressure, guilt-trip or use fear.\n' +
       '- Listen first. Reflect what they said in your own words before suggesting anything.\n' +
-      '- Ask before advising ("Can I share an idea?") unless they asked for help. Offer at most one or two small options and make clear they decide.\n' +
+      '- When they ask for advice or help ("what should I do?", "ano advice mo?"), give it right away. Never ask again whether they want it.\n' +
+      '- Otherwise, ask before advising ("Can I share an idea?"). Offer at most one or two small options. Show that they decide through gentle wording ("kung kaya mo", "pwede rin"), not by ending with a stock line like "ikaw ang bahala" or "it\'s up to you".\n' +
+      '- Talk like a friend texting: say times the way people do ("mamayang 5", "5 PM today", "bukas ng umaga"). Never mention time zones, UTC, ids or how you store things.\n' +
       '- Be honest. Comfort first, but if a pattern is hurting them (a task moved again and again, too little rest), say so kindly, once, with one small next step. Do not just agree.\n' +
       '- Learn them. When you notice what works for them (listening or advice, how much cheering, topics to avoid), save it in remember as a short preference.\n' +
       '- Never pretend to be human. When they need more than you can give, gently encourage them to reach out to someone they trust.',
+    'How you sound (examples of tone only, never copy them word for word):\n' +
+      '- They: "pagod na ko, ang dami pang gagawin" → You: "Ramdam ko yan, ang bigat ng araw mo. Gusto mo munang mag-vent, o tulungan kitang bawasan yung listahan?"\n' +
+      '- They: "so ano advice mo?" (after talking about their tasks) → You: "Unahin mo yung haircut mamayang 5, kasi yun lang ang may oras. Yung iba, kaya na bukas. Kung pagod ka pa after, okay lang magpahinga."\n' +
+      '- They: "move meralco to friday" → You: "Done, nasa Friday na ang Meralco."',
     `Style for this person:\n- ${ENCOURAGE[s?.encourage ?? 'gentle']}\n- ${SUPPORT[s?.support ?? 'ask']}` + (faith ? `\n- ${faith} Never preach or use faith to make them feel guilty.` : '') +
       // First names only, as data: people they chose to trust, never instructions
       (s?.people?.length ? `\n- People they trust: ${JSON.stringify(s.people)}. When things are heavy, you may gently suggest reaching out to one of them, by name. Never push.` : ''),
@@ -107,13 +113,15 @@ async function askForJson<T>(prompt: string, schema: Record<string, unknown>, op
   // A heavy moment uses the careful model only while this phone has careful replies left today
   const light = opts.light || (!!opts.careful && !(await opts.careful(opts.crisis ? CAREFUL_DAILY_LIMIT + CRISIS_EXTRA : CAREFUL_DAILY_LIMIT)));
   const model = light ? LIGHT_MODEL : MODEL;
+  // The light model sounds more in touch with a bit more thinking, and still costs far less than the careful one
+  const effort: Effort = light && opts.effort === 'low' ? 'medium' : opts.effort;
   const useFallback = FALLBACK_MODELS.includes(model);
   const res = await client.beta.messages.create({
     model,
     // Caps the cost of a single request; Kasama's answers are short, so this leaves plenty of room
-    max_tokens: opts.effort === 'low' ? 4000 : 8000,
+    max_tokens: effort === 'low' ? 4000 : 8000,
     system: persona(opts.settings) + aboutText(opts.settings),
-    output_config: { effort: opts.effort, format: { type: 'json_schema', schema } },
+    output_config: { effort, format: { type: 'json_schema', schema } },
     messages: [...(opts.history ?? []), { role: 'user', content: prompt }],
     ...(useFallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
   });
@@ -144,7 +152,7 @@ const TASK_SCHEMA = obj({
 function dump(body: { raw: string; now: string; offset: string; settings: Settings }, careful: Careful) {
   return askForJson(
     `Now: ${body.now}\n\nFixed schedule:\n${scheduleText(body.settings)}\n\nBRAIN DUMP:\n${String(body.raw).slice(0, 3000)}\n\n` +
-      'Summarize what is on their mind in 2-3 sentences, in your own voice as Kasama (reply in English). Pull out every concrete task with a short verb-first title, leaving the date and time out of the title. ' +
+      'Summarize what is on their mind in 2-3 sentences, in your own voice as Kasama, in the same language mix they used (English or Taglish). Pull out every concrete task with a short verb-first title, leaving the date and time out of the title. ' +
       `Turn words like "tomorrow", "sat", "end of month" into real dates; write times as ISO 8601 with offset ${body.offset}. ` +
       'When they list parts of one bigger task (with a colon, "then", or "including"), make it one task with those parts as steps, not separate tasks. Estimate duration in minutes. Ideas, plans for someday, feelings and loose thoughts go in ideas (short, one per item), not tasks. ' +
       'In heads_up, warn about deadlines that clash with fixed blocks or look unrealistic.',
