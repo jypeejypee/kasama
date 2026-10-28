@@ -41,8 +41,8 @@ export const saveChat = (messages: ChatMessage[]) => write(KEYS.chat, messages.s
 export const getAlarms = async () => (await read<Alarm[]>(KEYS.alarms, [])).filter((a) => Date.parse(a.at) > Date.now());
 export const saveAlarms = (alarms: Alarm[]) => write(KEYS.alarms, alarms);
 
-// Testers' buddy on Home: which one (or none) and where you last put him
-export const getBuddy = () => read<BuddyState>(KEYS.buddy, { pick: 'poring' });
+// The buddy on Home: which one (or none) and where you last put him. Null until you first choose.
+export const getBuddy = () => read<BuddyState | null>(KEYS.buddy, null);
 export const saveBuddy = (b: BuddyState) => write(KEYS.buddy, b);
 
 // How each evening felt, from the check-in. One per day; Journey shows them as dots.

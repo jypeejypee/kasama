@@ -9,9 +9,9 @@ import { FONT, useColors } from '@/lib/theme';
 import { getBuddy, getMoods, getSettings, saveBuddy } from '@/lib/storage';
 import { todaysLines, type LineContext } from '@/lib/buddyLines';
 import { dayKey } from '@/lib/time';
-import type { BuddyPick, BuddyState } from '@/lib/types';
+import type { BuddyPick, BuddyState, Settings } from '@/lib/types';
 
-// A little friend on Home (testers only). He hops in the corner and says something kind when you tap him.
+// A little friend on Home: Kape (a mug of coffee) or Puto (a rice cake). He hops in the corner and says something kind when you tap him.
 // Drag him anywhere; drop him on Hide and he rests until you pick a buddy again in You.
 
 type Face = 'look' | 'blink' | 'happy' | 'wink' | 'love' | 'squish' | 'cool' | 'sparkle' | 'shy' | 'curious' | 'whoa' | 'cry' | 'dizzy' | 'sleep';
@@ -25,8 +25,6 @@ const SLEEP_AFTER = 20000;
 const INK = '#2b1d22';
 const LIP = '#3a242c';
 
-// The faces are drawn for Poring; on the Dino kid they sit a little smaller, inside his hood
-const DINO_FACE = 'matrix(0.82,0,0,0.82,9,1.36)';
 
 function FaceArt({ face }: { face: Face }) {
   const w = { fill: 'none', stroke: INK, strokeWidth: 2.6, strokeLinecap: 'round' } as const;
@@ -129,67 +127,116 @@ function FaceArt({ face }: { face: Face }) {
   }
 }
 
-function PoringBody() {
+function KapeBody() {
   return (
     <G>
-      <Circle cx={90} cy={6} r={5.5} fill="url(#ball)" stroke="#c9577f" strokeWidth={1} />
-      <Circle cx={88.4} cy={4.2} r={1.6} fill="#ffffff" opacity={0.85} />
-      <Path d="M50 10 C54 18 66 21 78 28 C92 36 98 50 95 62 C92 74 78 79 50 79 C22 79 8 74 5 62 C2 50 8 36 22 28 C34 21 46 18 50 10 Z" fill="url(#pink)" stroke="#c9577f" strokeWidth={1.6} strokeLinejoin="round" />
-      <Ellipse cx={26} cy={38} rx={9} ry={5} fill="#ffffff" opacity={0.75} transform="rotate(-30 26 38)" />
-      <Path d="M49 14 C47 19 43 22 39 24" fill="none" stroke="#ffffff" strokeWidth={2.4} strokeLinecap="round" opacity={0.7} />
-      <Ellipse cx={22} cy={58} rx={8} ry={5} fill="#ff6f98" opacity={0.4} />
-      <Ellipse cx={78} cy={58} rx={8} ry={5} fill="#ff6f98" opacity={0.4} />
+      <Path d="M38 22 C34 16 42 12 38 6 M50 20 C46 13 54 9 50 2 M62 22 C58 16 66 12 62 6" fill="none" stroke="#c9b8a6" strokeWidth={2.2} strokeLinecap="round" opacity={0.75} />
+      <Ellipse cx={50} cy={80} rx={44} ry={5.5} fill="#ffffff" stroke="#d6e0e6" strokeWidth={1.2} />
+      <Path d="M84 40 C99 39 100 64 82 63" fill="none" stroke="#d9bf9c" strokeWidth={7.5} strokeLinecap="round" />
+      <Path d="M84 40 C99 39 100 64 82 63" fill="none" stroke="#f7ebdc" strokeWidth={4} strokeLinecap="round" />
+      <Path d="M13 33 C13 27 87 27 87 33 L83 70 C82 80 18 80 17 70 Z" fill="url(#mug)" stroke="#d9bf9c" strokeWidth={1.6} strokeLinejoin="round" />
+      <Ellipse cx={50} cy={32} rx={35} ry={6} fill="#6b3f22" />
+      <Ellipse cx={50} cy={31.5} rx={31} ry={4.4} fill="#8a5432" />
+      <Path d="M50 35 c-4.5 -2.6 -4.5 -6.2 -1.8 -6.2 c1.1 0 1.8 0.8 1.8 1.5 c0 -0.7 0.7 -1.5 1.8 -1.5 c2.7 0 2.7 3.6 -1.8 6.2 z" fill="#e8c39a" />
+      <Path d="M21 42 L23 64" stroke="#ffffff" strokeWidth={2.6} strokeLinecap="round" opacity={0.85} />
+      <Path d="M16 46 Q50 51 84 46" fill="none" stroke="#c98d5a" strokeWidth={2} opacity={0.5} />
+      <Ellipse cx={25} cy={59} rx={7} ry={4.2} fill="#ff8fa3" opacity={0.4} />
+      <Ellipse cx={75} cy={59} rx={7} ry={4.2} fill="#ff8fa3" opacity={0.4} />
     </G>
   );
 }
 
-function DinoBody() {
+// Kape asleep: someone keeps pouring and he overflows, a little more every moment (stage 1 to 4)
+function KapeOverflow({ stage }: { stage: number }) {
+  const spill = { fill: 'none', stroke: '#7a4527', strokeLinecap: 'round' } as const;
   return (
     <G>
-      <Path d="M30 70 C18 70 8 64 2 54 C10 60 20 62 30 62 Z" fill="#e59a8f" stroke="#c97a70" strokeWidth={1.2} strokeLinejoin="round" />
-      <Path d="M7 58 l1 -6 l4 5 Z M14 61 l2 -6 l3 6 Z M21 62 l3 -6 l2 6 Z" fill="#8fc9c3" />
-      <Ellipse cx={41} cy={80} rx={7} ry={3.4} fill="#d98a80" />
-      <Ellipse cx={59} cy={80} rx={7} ry={3.4} fill="#d98a80" />
-      <Ellipse cx={26} cy={68} rx={5} ry={7.5} fill="#f3e6d6" stroke="#d8c3ad" strokeWidth={1} transform="rotate(20 26 68)" />
-      <Ellipse cx={74} cy={68} rx={5} ry={7.5} fill="#f3e6d6" stroke="#d8c3ad" strokeWidth={1} transform="rotate(-20 74 68)" />
-      <Path d="M31 61 Q50 55 69 61 L72 77 Q50 83 28 77 Z" fill="#f3e6d6" stroke="#d8c3ad" strokeWidth={1.2} strokeLinejoin="round" />
-      <Path d="M33 69 Q50 72 67 69 M50 61 V80" fill="none" stroke="#d8c3ad" strokeWidth={1} />
-      <Circle cx={40} cy={74} r={2.4} fill="#e8836f" /><Circle cx={61} cy={66} r={2.2} fill="#e8836f" /><Circle cx={64} cy={75} r={1.8} fill="#e8836f" />
-      <Path d="M45 60 L44 68 M55 60 L56 68" stroke="#c97a70" strokeWidth={1} strokeLinecap="round" />
-      <Path d="M36 12 L40 0 L45 9 Z M55 9 L60 0 L64 12 Z" fill="#e59a8f" stroke="#c97a70" strokeWidth={1} strokeLinejoin="round" />
-      <Path d="M76 18 L88 14 L82 25 Z M80 30 L92 30 L83 38 Z" fill="#8fc9c3" />
-      <Circle cx={50} cy={37} r={30} fill="#e59a8f" stroke="#c97a70" strokeWidth={1.4} />
-      <Circle cx={39} cy={15} r={3.6} fill="#ffffff" stroke="#c97a70" strokeWidth={0.8} /><Circle cx={39.6} cy={15.4} r={1.8} fill={INK} />
-      <Circle cx={61} cy={15} r={3.6} fill="#ffffff" stroke="#c97a70" strokeWidth={0.8} /><Circle cx={61.6} cy={15.4} r={1.8} fill={INK} />
-      <Ellipse cx={50} cy={43} rx={25} ry={23} fill="#f3e6d6" />
-      <Ellipse cx={50} cy={45} rx={21} ry={19} fill="#ffe0cc" />
-      <Path d="M29 41 Q33 26 50 26 Q67 26 71 41 Q65 34 58 37 Q54 31 49 36 Q44 31 40 37 Q35 34 29 41 Z" fill="#5a3a2a" />
-      <Ellipse cx={36} cy={51} rx={4.6} ry={2.8} fill="#ff8f8f" opacity={0.45} />
-      <Ellipse cx={64} cy={51} rx={4.6} ry={2.8} fill="#ff8f8f" opacity={0.45} />
+      {stage >= 4 && <Ellipse cx={50} cy={80.5} rx={38} ry={3.6} fill="#7a4527" opacity={0.85} />}
+      {stage >= 1 && <Path d="M15 32 C15 25 85 25 85 32 C85 34 15 34 15 32 Z" fill="#7a4527" />}
+      {stage >= 2 && <Path d="M17 32 C14 40 18 48 16 58" {...spill} strokeWidth={3.4} />}
+      {stage >= 3 && <Path d="M83 32 C86 41 82 49 84 60" {...spill} strokeWidth={3.4} />}
+      {stage >= 4 && <Path d="M34 33 C33 37 35 40 34 44 M70 33 C71 38 69 41 70 46" {...spill} strokeWidth={3} />}
+      {stage >= 4 && <><Circle cx={16} cy={62} r={1.8} fill="#7a4527" /><Circle cx={84} cy={64} r={1.8} fill="#7a4527" /></>}
     </G>
   );
 }
 
-// The drawing alone: also used, smaller, for the choices in You
-export function BuddyArt({ who, face = 'look', size = ART }: { who: Exclude<BuddyPick, 'none'>; face?: Face; size?: number }) {
+// The little coffee pot that floats in and keeps pouring while Kape sleeps
+function CoffeePot() {
   return (
-    <Svg width={size} height={(size * 100) / 112} viewBox="-6 -18 112 100">
-      <Defs>
-        <RadialGradient id="pink" cx="0.45" cy="0.55" r="0.68">
-          <Stop offset="0" stopColor="#ffc6d6" />
-          <Stop offset="0.6" stopColor="#f7a0b9" />
-          <Stop offset="1" stopColor="#e57d9e" />
-        </RadialGradient>
-        <RadialGradient id="ball" cx="0.35" cy="0.3" r="0.8">
-          <Stop offset="0" stopColor="#ffd6e3" />
-          <Stop offset="1" stopColor="#ef8aab" />
-        </RadialGradient>
-      </Defs>
-      {who === 'poring' ? <PoringBody /> : <DinoBody />}
-      <G transform={who === 'dino' ? DINO_FACE : undefined}><FaceArt face={face} /></G>
+    <Svg width={62} height={96} viewBox="0 0 62 96">
+      <Path d="M43 31 C46 44 47 70 48 92" fill="none" stroke="#7a4527" strokeWidth={3} strokeLinecap="round" strokeDasharray="5 4" />
+      <Path d="M8 18 C0 18 0 32 9 32" fill="none" stroke="#3f7fb0" strokeWidth={3} strokeLinecap="round" />
+      <Path d="M9 12 C9 6 33 6 33 12 L35 32 C35 37 7 37 7 32 Z" fill="#fff8ee" stroke="#3f7fb0" strokeWidth={1.6} strokeLinejoin="round" />
+      <Path d="M8 15 H34" stroke="#3f7fb0" strokeWidth={2} />
+      <Path d="M14 7 C14 3 28 3 28 7 Z" fill="#fff8ee" stroke="#3f7fb0" strokeWidth={1.4} />
+      <Circle cx={21} cy={3} r={2} fill="#3f7fb0" />
+      <Path d="M33 22 L44 27 L45 30.5 L34 29 Z" fill="#fff8ee" stroke="#3f7fb0" strokeWidth={1.4} strokeLinejoin="round" />
+      <Path d="M14 20 V30" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" />
     </Svg>
   );
 }
+
+function PutoBody() {
+  return (
+    <G>
+      <Path d="M13 47 C13 23 29 13 50 13 C71 13 87 23 87 47 C91 53 93 61 91 69 C89 77 73 80 50 80 C27 80 11 77 9 69 C7 61 9 53 13 47 Z" fill="url(#puto)" stroke="#dcc6a5" strokeWidth={1.6} strokeLinejoin="round" />
+      <Path d="M11 61 Q50 70 89 61" fill="none" stroke="#e6d3b5" strokeWidth={1.4} />
+      <Path d="M20 66 Q19 72 21 77 M32 68 Q31 74 32 79 M44 69 Q43 75 44 80 M56 69 Q57 75 56 80 M68 68 Q69 74 68 79 M80 66 Q81 72 79 77" fill="none" stroke="#ead9bd" strokeWidth={1.3} strokeLinecap="round" />
+      <Ellipse cx={28} cy={31} rx={9} ry={4.5} fill="#ffffff" opacity={0.9} transform="rotate(-25 28 31)" />
+      <Path d="M37 13 L61 8 L65 20 C61 21 59 25 58 22 C57 20 54 22 41 25 Z" fill="#ffd55a" stroke="#e9b73a" strokeWidth={1.2} strokeLinejoin="round" />
+      <Path d="M44 15 L56 12.5" stroke="#fff1b8" strokeWidth={1.6} strokeLinecap="round" />
+      <Ellipse cx={22} cy={58} rx={8} ry={5} fill="#ff8fa3" opacity={0.4} />
+      <Ellipse cx={78} cy={58} rx={8} ry={5} fill="#ff8fa3" opacity={0.4} />
+    </G>
+  );
+}
+
+// Puto asleep: his cheese slowly melts down his head (stage 1 to 3)
+function PutoMelt({ stage }: { stage: number }) {
+  if (stage < 1) return null;
+  return (
+    <G>
+      <Path d="M36 12.5 L61 7.5 L66 19.5 C65 23 63 29 61 29 C59 29 59.5 23.5 57.5 23.5 C55.5 23.5 55 33 51.5 33 C48 33 49.5 25.5 46.5 25.5 C44 25.5 43.5 29 41.5 29 C39.5 29 40.5 25 40.5 24 Z" fill="#ffd55a" stroke="#e9b73a" strokeWidth={1.2} strokeLinejoin="round" />
+      {stage >= 2 && <Path d="M51.5 33 V42" stroke="#ffd55a" strokeWidth={3} strokeLinecap="round" />}
+      {stage >= 3 && <Path d="M61 29 V36" stroke="#ffd55a" strokeWidth={2.6} strokeLinecap="round" />}
+    </G>
+  );
+}
+
+// The drawing alone: also used, smaller, for the choices in You. rest: how far into his nap (0 when awake).
+export function BuddyArt({ who, face = 'look', size = ART, rest = 0 }: { who: Exclude<BuddyPick, 'none'>; face?: Face; size?: number; rest?: number }) {
+  return (
+    <Svg width={size} height={(size * 100) / 112} viewBox="-6 -18 112 100">
+      <Defs>
+        <RadialGradient id="mug" cx="0.4" cy="0.4" r="0.75">
+          <Stop offset="0" stopColor="#fffaf3" />
+          <Stop offset="0.7" stopColor="#f7ebdc" />
+          <Stop offset="1" stopColor="#e9d6bd" />
+        </RadialGradient>
+        <RadialGradient id="puto" cx="0.42" cy="0.38" r="0.75">
+          <Stop offset="0" stopColor="#ffffff" />
+          <Stop offset="0.65" stopColor="#fbf4e8" />
+          <Stop offset="1" stopColor="#eedfc6" />
+        </RadialGradient>
+      </Defs>
+      {who === 'kape' ? <KapeBody /> : <PutoBody />}
+      {who === 'kape' ? <KapeOverflow stage={rest} /> : <PutoMelt stage={rest} />}
+      {/* The faces are drawn for a round face; on Kape's mug they sit a touch lower, below the coffee */}
+      <G transform={who === 'kape' ? 'translate(0,2)' : undefined}><FaceArt face={face} /></G>
+    </Svg>
+  );
+}
+
+// Never chosen yet: Kape, unless they asked for "just the tools". Earlier test buddies (Poring, the Dino kid) become Kape.
+export function pickFor(b: BuddyState | null, s: Settings): BuddyPick {
+  if (!b) return s.encourage === 'quiet' ? 'none' : 'kape';
+  return b.pick === 'puto' || b.pick === 'none' ? b.pick : 'kape';
+}
+
+// How each one dozes off and wakes up
+const SLEEP_LINES = { kape: 'Zzz... isa pa pong kape...', puto: 'Zzz... natutunaw na yung keso ko...' };
+const WAKE_LINES = { kape: "Hala, umapaw! Gising na 'ko!", puto: 'Ay, yung keso ko!' };
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -207,6 +254,8 @@ export function Buddy() {
   const [asleep, setAsleep] = useState(false);
   const [resting, setResting] = useState(false);
   const [visit, setVisit] = useState(0); // goes up each time Home comes back into view
+  const [restStage, setRestStage] = useState(0); // how far into his nap: Kape overflows, Puto's cheese melts
+  const [partner, setPartner] = useState(false); // at merienda the other one peeks in
 
   // Where he stands (the drag moves this) and how he hops (scale and tilt for squash, stretch and wiggle)
   const [pos] = useState(() => new Animated.ValueXY());
@@ -215,10 +264,11 @@ export function Buddy() {
   const [sy] = useState(() => new Animated.Value(1));
   const [tilt] = useState(() => new Animated.Value(0));
   const anim = useRef<Animated.CompositeAnimation | null>(null);
-  const timers = useRef<{ face?: ReturnType<typeof setTimeout>; line?: ReturnType<typeof setTimeout>; sleep?: ReturnType<typeof setTimeout>; rest?: ReturnType<typeof setTimeout> }>({});
+  const timers = useRef<{ face?: ReturnType<typeof setTimeout>; line?: ReturnType<typeof setTimeout>; sleep?: ReturnType<typeof setTimeout>; rest?: ReturnType<typeof setTimeout>; partner?: ReturnType<typeof setTimeout> }>({});
   const lines = useRef({ list: todaysLines(), i: 0 });
   const context = useRef<LineContext>({}); // your faith choice and last night's check-in, read each time Home opens
   const taps = useRef<number[]>([]);
+  const merienda = useRef(''); // the day the merienda moment last happened, so it's once a day
   const drag = useRef({ on: false, over: false, x: 0, y: 0, px: 0, py: 0 }); // px, py: where the finger went down
 
   // The floating tab bar sits at the bottom; he starts just above it, on the right
@@ -230,6 +280,7 @@ export function Buddy() {
     y: clamp(b?.y ?? home.y, 0, Math.max(0, barTop - H_BOX)),
   });
   const spot = placeOf(saved);
+  const who: 'kape' | 'puto' = saved?.pick === 'puto' ? 'puto' : 'kape';
 
   const to = (v: Animated.Value, value: number, ms: number) => Animated.timing(v, { toValue: value, duration: ms, easing: Easing.inOut(Easing.quad), useNativeDriver: true });
   const step = (y: number, x: number, s: number, ms: number, r = 0) => Animated.parallel([to(hopY, y, ms), to(sx, x, ms), to(sy, s, ms), to(tilt, r, ms)]);
@@ -278,8 +329,8 @@ export function Buddy() {
     clearTimeout(timers.current.sleep);
     timers.current.sleep = setTimeout(() => {
       setAsleep(true);
-      setLine('');
       showFace('sleep');
+      speak(SLEEP_LINES[who]);
       breathe();
     }, SLEEP_AFTER);
   };
@@ -287,8 +338,9 @@ export function Buddy() {
   const tap = () => {
     if (asleep) {
       setAsleep(false);
+      setRestStage(0);
       showFace('whoa', 1200);
-      speak('Uy! Nandito ka na pala.');
+      speak(WAKE_LINES[who]);
       idle();
       return awake();
     }
@@ -323,6 +375,7 @@ export function Buddy() {
     drag.current = { ...drag.current, on: true, over: false, x: spot.x, y: spot.y };
     setHeld(true);
     setAsleep(false);
+    setRestStage(0);
     setLine('');
     showFace('whoa');
     clearTimeout(timers.current.sleep);
@@ -347,7 +400,7 @@ export function Buddy() {
     setHeld(false);
     setOver(false);
     if (onTrash) return void rest();
-    const next: BuddyState = { pick: saved?.pick ?? 'poring', x, y };
+    const next: BuddyState = { pick: saved?.pick ?? 'kape', x, y };
     setSaved(next);
     void saveBuddy(next);
     showFace('happy', 1000);
@@ -383,7 +436,7 @@ export function Buddy() {
       Promise.all([getBuddy(), getSettings(), getMoods()]).then(([b, s, moods]) => {
         if (!alive) return;
         context.current = { faith: s.faith, amount: s.faithAmount, tiredYesterday: moods.some((m) => m.date === dayKey(y) && m.feeling === 'Pagod') };
-        setSaved(b);
+        setSaved({ ...b, pick: pickFor(b, s) });
         setVisit((v) => v + 1);
       });
       return () => {
@@ -392,22 +445,39 @@ export function Buddy() {
         Object.values(timers.current).forEach(clearTimeout);
         setLine('');
         setAsleep(false);
+        setRestStage(0);
+        setPartner(false);
         setFace('look');
       };
     }, []),
   );
   const shown = !!saved && saved.pick !== 'none' && box.h > 0;
-  const who = saved?.pick === 'dino' ? 'dino' : 'poring';
   useEffect(() => {
     if (!shown) return;
     pos.setValue(placeOf(saved));
     idle();
     awake();
-    const hello = setTimeout(() => speak(), 800);
+    // Merienda (2 to 5 PM): the other one peeks in for a moment; any other time, today's line
+    const hello = setTimeout(() => {
+      const h = new Date().getHours();
+      if (h < 14 || h >= 17 || merienda.current === dayKey()) return speak();
+      merienda.current = dayKey();
+      setPartner(true);
+      speak('Merienda na! Kape at puto tayo.');
+      clearTimeout(timers.current.partner);
+      timers.current.partner = setTimeout(() => setPartner(false), 4000);
+    }, 800);
     return () => clearTimeout(hello);
     // Runs when he appears, or when the pick or the screen size changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown, saved?.pick, box.w, box.h, visit]);
+
+  // Asleep, his nap goes on a little more every moment: more coffee spills, more cheese melts
+  useEffect(() => {
+    if (!asleep || reduce) return;
+    const t = setInterval(() => setRestStage((n) => Math.min(4, n + 1)), 1400);
+    return () => clearInterval(t);
+  }, [asleep, reduce]);
 
   // A blink every few seconds while he's just looking at you
   useEffect(() => {
@@ -444,13 +514,30 @@ export function Buddy() {
           style={[styles.buddy, { transform: [{ translateX: pos.x }, { translateY: pos.y }] }]}
         >
           {!!line && (
-            <View pointerEvents="none" style={[styles.bubble, low ? { top: H_BOX + 2 } : { bottom: H_BOX + 2 }, left ? { left: 0, borderBottomLeftRadius: 6 } : { right: 0, borderBottomRightRadius: 6 }]}>
+            <View
+              pointerEvents="none"
+              style={[
+                styles.bubble,
+                // While Kape naps the coffee pot is above him, so the bubble sits beside him instead
+                asleep && who === 'kape'
+                  ? [{ bottom: 6 }, left ? { left: W + 4 } : { right: W + 4 }]
+                  : [low ? { top: H_BOX + 2 } : { bottom: H_BOX + 2 }, left ? { left: 0, borderBottomLeftRadius: 6 } : { right: 0, borderBottomRightRadius: 6 }],
+              ]}
+            >
               <Text style={{ color: c.text, fontFamily: FONT.bold, fontSize: 14, lineHeight: 20 }}>{line}</Text>
             </View>
           )}
+          {partner && (
+            <View pointerEvents="none" style={[styles.partner, left ? { right: -44 } : { left: -44 }]}>
+              <BuddyArt who={who === 'kape' ? 'puto' : 'kape'} face="happy" size={48} />
+            </View>
+          )}
+          {asleep && who === 'kape' && (
+            <View pointerEvents="none" style={styles.pot}><CoffeePot /></View>
+          )}
           <View style={[styles.shadow, { opacity: held ? 0.5 : 1, transform: [{ scaleX: held ? 0.6 : 1 }] }]} />
           <Animated.View style={{ position: 'absolute', left: (W - ART) / 2, bottom: 2, transform: [{ translateY: Animated.add(hopY, lift) }, { rotate }, { scaleX: sx }, { scaleY: sy }] }}>
-            <BuddyArt who={who} face={face === 'look' && blink ? 'blink' : face} />
+            <BuddyArt who={who} face={face === 'look' && blink ? 'blink' : face} rest={asleep ? (reduce ? 4 : restStage) : 0} />
           </Animated.View>
         </Animated.View>
       )}
@@ -464,16 +551,16 @@ export function Buddy() {
   );
 }
 
-// "Your buddy on Home" in You: Poring, the Dino kid, or none
+// "Your buddy on Home" in You: Kape, Puto, or none
 const PICKS: [BuddyPick, string, string][] = [
-  ['poring', 'Poring', 'Bouncy and pink'],
-  ['dino', 'Dino kid', 'Small and brave'],
+  ['kape', 'Kape', 'Mainit at gising'],
+  ['puto', 'Puto', 'Malambot at masaya'],
   ['none', 'No buddy', 'Just a calm Home'],
 ];
 export function BuddyPicker() {
   const c = useColors();
   const [pick, setPick] = useState<BuddyPick | null>(null);
-  useFocusEffect(useCallback(() => { getBuddy().then((b) => setPick(b.pick)); }, []));
+  useFocusEffect(useCallback(() => { Promise.all([getBuddy(), getSettings()]).then(([b, s]) => setPick(pickFor(b, s))); }, []));
   const choose = async (p: BuddyPick) => {
     setPick(p);
     await saveBuddy({ pick: p }); // a new pick starts back in his corner
@@ -508,5 +595,7 @@ const styles = StyleSheet.create({
   trash: { position: 'absolute', width: 76, height: 76, borderRadius: 38, borderWidth: 2, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   toast: { position: 'absolute', left: 24, right: 24, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16 },
   pick: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 22, backgroundColor: '#ffffff', borderWidth: 2 },
+  partner: { position: 'absolute', bottom: 2 },
+  pot: { position: 'absolute', left: -8, top: -50 },
   empty: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderStyle: 'dashed', borderColor: '#a9b3ae', marginVertical: 5 },
 });

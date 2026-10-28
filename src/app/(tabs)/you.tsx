@@ -182,7 +182,7 @@ export default function You() {
     <ScrollView style={{ backgroundColor: c.sky }} contentContainerStyle={{ paddingTop: insets.top + 18, paddingHorizontal: 24, paddingBottom: 130, gap: 10 }} keyboardShouldPersistTaps="handled">
       <Title size={24}>You</Title>
       <Muted>Make me yours. Change anything, anytime. I&apos;ll learn the rest as we talk.</Muted>
-      {TESTER && <BuddyPicker />}
+      <BuddyPicker />
 
       <H>Where do you feel calm?</H>
       {PLACES.map(([p, name, line]) => {
@@ -210,8 +210,8 @@ export default function You() {
       <H>Faith (only if you want)</H>
       <View style={styles.wrap}>{FAITH.map(([v, label]) => <Chip key={v} label={label} active={(s.faith ?? 'none') === v} onPress={() => setS({ ...s, faith: v })} />)}</View>
       {s.faith === 'other' && <TextInput accessibilityLabel="Your faith" value={s.faithOther ?? ''} onChangeText={(v) => setS({ ...s, faithOther: v })} style={field} placeholder="Write your faith in your own words" placeholderTextColor="#8a9590" />}
-      {/* Testers' buddy: how often a calm faith line comes up among his everyday words */}
-      {TESTER && (s.faith === 'christian' || s.faith === 'spiritual') && (
+      {/* How often a calm faith line comes up among the buddy's everyday words */}
+      {(s.faith === 'christian' || s.faith === 'spiritual') && (
         <>
           <Muted>In your buddy&apos;s words, gently mixed with everyday encouragement:</Muted>
           <View style={styles.wrap}>

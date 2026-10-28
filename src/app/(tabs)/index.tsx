@@ -18,7 +18,6 @@ import { nudgeFor, sayHi } from '@/lib/people';
 import { getSettings, saveSettings } from '@/lib/storage';
 import type { Task } from '@/lib/types';
 import { asleepAt } from '@/lib/sleep';
-import { TESTER } from '@/lib/tester';
 
 const rank = { high: 0, medium: 1, low: 2 } as const;
 // The open tasks, as one short key, to know whether the list changed since Kasama spoke
@@ -181,8 +180,8 @@ export default function Home() {
         {mode === 'night' && <Button title="Back to tonight's check-in" variant="link" onPress={() => setShowDay(false)} />}
       </View>
     </ScrollView>
-    {/* Testers get a little buddy on Home */}
-    {TESTER && <Buddy />}
+    {/* A little buddy on Home: Kape or Puto, chosen in You */}
+    <Buddy />
     </View>
   );
 }

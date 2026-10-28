@@ -81,6 +81,6 @@ export type DayPlan = {
   not_today: string[];
 };
 
-// The buddy on Home (testers only): which one, or none, and where you last put him
-export type BuddyPick = 'poring' | 'dino' | 'none';
+// The buddy on Home: Kape (a mug of coffee), Puto (a rice cake), or none, and where you last put him
+export type BuddyPick = 'kape' | 'puto' | 'none';
 export type BuddyState = { pick: BuddyPick; x?: number; y?: number };

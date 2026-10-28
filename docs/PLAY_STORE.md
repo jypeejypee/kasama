@@ -53,6 +53,7 @@ Data types. For each: **Collected: yes. Shared: no** (Supabase and Anthropic pro
 | App activity → **Other user-generated content** | App functionality, Personalization | Optional | Tasks, schedule, "What I know about you", first names of their people |
 | Calendar → **Calendar events** | App functionality | Optional | Only busy times, processed to plan the day. Mark **processed ephemerally** |
 | Device or other IDs | App functionality, Fraud prevention / security | Required | The anonymous account ID used for daily limits |
+| Personal info → **Religious or political beliefs** | Personalization | Optional | Only if they pick a faith in You (Christian, Spiritual or their own words). Sent with messages so Kasama can talk to them that way. Mark **processed ephemerally** |
 
 **Not collected:** location, contacts list, photos, audio (speech becomes text on the phone), health data (moods stay on the phone), financial info, web history.
 
@@ -74,14 +75,17 @@ Data types. For each: **Collected: yes. Shared: no** (Supabase and Anthropic pro
 >
 > • Brain dump: type or speak. Kasama pulls out tasks, dates and ideas.
 > • A short path each morning, and a gentle check-in at night.
+> • Your calendar and to-dos together. Plan my day never books over a meeting.
+> • A gentle heads-up the night before: what's coming tomorrow.
 > • Reminders that don't pressure you. Miss something? It helps fix the rest of your day.
+> • A little buddy on your Home: Kape or Puto, with a kind word every day.
 > • Honest, but kind: it notices when you keep moving the same task.
 > • Make it yours: listen or advise, how much cheering, even faith.
 > • Your lists stay on your phone. No ads.
 >
 > Kasama is not a therapist or an emergency service. If you are in danger, contact the NCMH Crisis Hotline (1553) or 911.
 
-**Graphics:** app icon 512×512 PNG · feature graphic 1024×500 · at least 2 phone screenshots (your design screens work well).
+**Graphics:** ready in the `store/` folder: `icon-512.png`, `feature-graphic.png`, and `screenshot-1` to `screenshot-6` (upload in that order).
 
 Words to avoid in the listing: therapy, treatment, cure, diagnose, mental health app.
 
