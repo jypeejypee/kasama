@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
@@ -40,8 +40,8 @@ export default function You() {
   const insets = useSafeAreaInsets();
   const [s, setS] = useState<Settings>(DEFAULT_SETTINGS);
   const [msg, setMsg] = useState('');
-  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const lastSaved = useRef(''); // what's stored now, so opening the screen doesn't count as a change
   const [who, setWho] = useState({ name: '', how: 'sms' as Person['how'], handle: '' });
   const [cals, setCals] = useState<PhoneCalendar[] | null>(null);
   const [calMsg, setCalMsg] = useState('');
@@ -49,6 +49,7 @@ export default function You() {
   // Load the saved settings each time you open this screen (chat may have added to About me)
   useFocusEffect(useCallback(() => {
     getSettings().then((saved) => {
+      lastSaved.current = JSON.stringify(saved);
       setS(saved);
       // Already connected: show the calendar list again (no new permission prompt)
       if (saved.calendarIds?.length) connectCalendars().then((r) => { if (Array.isArray(r)) setCals(r); });
@@ -92,34 +93,34 @@ export default function You() {
     await saveSettings({ ...(await getSettings()), place: p });
   }
 
-  async function save() {
-    // Accept times the way people type them ("7", "7pm", "7:30 PM") and tidy them to 07:00 style
-    const bad: string[] = [];
-    const fix = (value: string, label: string) => { const t = toHHMM(value); if (!t) bad.push(label); return t ?? value; };
-    const next: Settings = {
-      ...s,
-      morningDigest: fix(s.morningDigest, 'Morning hello'),
-      eveningReview: fix(s.eveningReview, 'Evening check-in'),
-      fixedBlocks: s.fixedBlocks.map((b) => ({ ...b, start: fix(b.start, `${b.label} start`), end: fix(b.end, `${b.label} end`) })),
-    };
-    if (bad.length) {
-      setSaved(false);
-      return setMsg(`I couldn't read the time for ${bad.join(', ')}. Try something like 7:00 or 7pm.`);
-    }
-    setSaving(true);
-    setMsg('');
-    try {
-      setS(next);
-      await saveSettings(next);
-      await rescheduleAll();
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (e) {
-      setMsg(`Couldn't save just now: ${(e as Error).message}`);
-    } finally {
-      setSaving(false);
-    }
-  }
+  // No Save button to forget: every change here saves itself a moment after you stop, and your reminders follow
+  useEffect(() => {
+    if (!lastSaved.current || JSON.stringify(s) === lastSaved.current) return;
+    const t = setTimeout(async () => {
+      // Accept times the way people type them ("7", "7pm", "7:30 PM") and tidy them to 07:00 style
+      const bad: string[] = [];
+      const fix = (value: string, label: string) => { const v = toHHMM(value); if (!v) bad.push(label); return v ?? value; };
+      const next: Settings = {
+        ...s,
+        morningDigest: fix(s.morningDigest, 'Morning hello'),
+        eveningReview: fix(s.eveningReview, 'Evening check-in'),
+        fixedBlocks: s.fixedBlocks.map((b) => ({ ...b, start: fix(b.start, `${b.label} start`), end: fix(b.end, `${b.label} end`) })),
+      };
+      if (bad.length) return setMsg(`I couldn't read the time for ${bad.join(', ')}. Try something like 7:00 or 7pm.`);
+      try {
+        lastSaved.current = JSON.stringify(next);
+        await saveSettings(next);
+        void rescheduleAll();
+        setMsg('');
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1500);
+      } catch (e) {
+        lastSaved.current = '';
+        setMsg(`Couldn't save just now: ${(e as Error).message}`);
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [s]);
 
   async function test() {
     const ok = await setupNotifications();
@@ -279,8 +280,6 @@ export default function You() {
 
       <View style={{ height: 6 }} />
       {!!msg && <Text style={{ color: /^(I couldn't|Couldn't|Notifications are off|This phone)/.test(msg) ? c.high : c.accent, fontFamily: FONT.strong, fontSize: 15, textAlign: 'center' }}>{msg}</Text>}
-      <Button title={saved ? 'Saved ✓' : 'Save'} onPress={save} busy={saving} />
-      {saved && <Muted style={{ textAlign: 'center' }}>Your reminders follow these now.</Muted>}
 
       <H>Your people</H>
       <Muted>Someone you trust. Now and then I&apos;ll remind you to say hi. I only open your own messaging app; I never message anyone myself.</Muted>
@@ -354,11 +353,17 @@ export default function You() {
       <Button title="Privacy policy" variant="link" onPress={() => Linking.openURL(PRIVACY_URL)} />
       <Button title="Delete my data" variant="link" onPress={confirmDelete} />
     </ScrollView>
+    {saved && (
+      <View pointerEvents="none" style={[styles.saved, { backgroundColor: c.text }]}>
+        <Text style={{ color: '#ffffff', fontFamily: FONT.bold, fontSize: 14 }}>Saved ✓</Text>
+      </View>
+    )}
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  saved: { position: 'absolute', alignSelf: 'center', bottom: 104, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 18 },
   wrap: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   place: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 24, backgroundColor: '#ffffff', borderWidth: 2 },
   block: { gap: 10, padding: 16, borderRadius: 24, backgroundColor: '#ffffff' },
