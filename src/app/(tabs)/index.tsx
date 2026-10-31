@@ -20,8 +20,8 @@ import type { Task } from '@/lib/types';
 import { asleepAt } from '@/lib/sleep';
 
 const rank = { high: 0, medium: 1, low: 2 } as const;
-// The open tasks, as one short key, to know whether the list changed since Kasama spoke
-const openKey = (list: Task[]) => list.filter((t) => t.status === 'todo').map((t) => t.id).sort().join(',');
+// The open tasks and their times, as one short key, to know whether the list changed since Kasama spoke
+const openKey = (list: Task[]) => list.filter((t) => t.status === 'todo').map((t) => `${t.id} ${t.scheduled_start} ${t.due_at}`).sort().join(',');
 
 // Home follows YOUR day, not the clock (night shift too): a short path for the first hours after you wake up,
 // "what's next" after that, and from half an hour before your check-in until you wake, the check-in.
@@ -93,7 +93,7 @@ export default function Home() {
     setPlanFor(openKey(next));
     setMoves(missed.map((t) => `Moved ${t.title} to tomorrow`));
   }
-  // Kasama's last plan only makes sense for the list it was made for: once you finish, add or
+  // Kasama's last plan only makes sense for the list it was made for: once you finish, add, move or
   // let go of something, the old message quietly disappears instead of contradicting the screen
   const fresh = planFor === openKey(tasks);
   const toggle = async (t: Task) => setTasks(await toggleTask(t));

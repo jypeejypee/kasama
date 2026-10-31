@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Button } from '@/components/ui';
+import { Button, Muted } from '@/components/ui';
 import { WhenField } from '@/components/WhenField';
 import { FONT, useColors } from '@/lib/theme';
 import { KEYBOARD_BEHAVIOR } from '@/lib/keyboard';
 import { newId } from '@/lib/storage';
+import { fmtDue } from '@/lib/time';
 import type { Step } from '@/lib/types';
 
-export type Details = { title: string; notes: string | null; steps: Step[]; due_at?: string | null };
+export type Details = { title: string; notes: string | null; steps: Step[]; due_at?: string | null; scheduled_start?: string | null; scheduled_end?: string | null };
+
+const NO_SLOT = { scheduled_start: null, scheduled_end: null };
 
 // "3 of 5 steps" or "has notes", for the line under a task or idea
 export function detailHint(d: { notes?: string | null; steps?: Step[] }) {
@@ -36,7 +39,7 @@ function Sheet({ item, kind, onClose, onSave }: { item: Details; kind: 'task' | 
   const close = () => {
     const pending = step.trim() ? [...d.steps, { id: newId(), text: step.trim(), done: false }] : d.steps;
     const saved: Details = { title: d.title.trim() || item.title, notes: d.notes?.trim() ? d.notes : null, steps: pending.filter((s) => s.text.trim()) };
-    onSave(kind === 'task' ? { ...saved, due_at: d.due_at ?? null } : saved);
+    onSave(kind === 'task' ? { ...saved, due_at: d.due_at ?? null, scheduled_start: d.scheduled_start ?? null, scheduled_end: d.scheduled_end ?? null } : saved);
     onClose();
   };
   const addStep = () => {
@@ -57,7 +60,14 @@ function Sheet({ item, kind, onClose, onSave }: { item: Details; kind: 'task' | 
           {kind === 'task' && (
             <>
               <Text style={[styles.label, { color: c.accent }]}>WHEN</Text>
-              <WhenField value={d.due_at ?? null} onChange={(due_at) => setD({ ...d, due_at })} />
+              {/* The time you pick wins over the time Kasama planned, same as moving a task in chat */}
+              <WhenField value={d.due_at ?? null} onChange={(due_at) => setD({ ...d, due_at, ...NO_SLOT })} />
+              {!!d.scheduled_start && (
+                <View style={styles.planned}>
+                  <Muted style={{ flex: 1 }}>Planned for {fmtDue(d.scheduled_start)}</Muted>
+                  <Button title="Remove" variant="link" onPress={() => setD({ ...d, ...NO_SLOT })} />
+                </View>
+              )}
             </>
           )}
 
@@ -105,6 +115,7 @@ const styles = StyleSheet.create({
   sheet: { maxHeight: '85%', paddingHorizontal: 22, paddingTop: 10, paddingBottom: 28, gap: 10, borderTopLeftRadius: 30, borderTopRightRadius: 26 },
   grip: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, marginBottom: 6 },
   label: { fontFamily: FONT.strong, fontSize: 12, letterSpacing: 0.8 },
+  planned: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
   add: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },

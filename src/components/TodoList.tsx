@@ -69,7 +69,7 @@ export function TodoList({ tasks, setTasks }: { tasks: Task[]; setTasks: (t: Tas
       ))}
       <DetailSheet
         kind="task"
-        item={opened ? { title: opened.title, notes: opened.notes, steps: opened.steps ?? [], due_at: opened.due_at } : null}
+        item={opened ? { title: opened.title, notes: opened.notes, steps: opened.steps ?? [], due_at: opened.due_at, scheduled_start: opened.scheduled_start, scheduled_end: opened.scheduled_end } : null}
         onClose={() => setOpenId(null)}
         onSave={async (d) => { if (opened) setTasks(await updateTaskSafely(opened.id, d)); }}
       />
