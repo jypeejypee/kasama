@@ -17,3 +17,6 @@ h2 { margin: 32px 0 6px; font-size: 20px; padding-top: 18px; border-top: 1px sol
 .muted { color: var(--muted); margin-top: 0; }
 a { color: var(--accent); }
 li { margin: 4px 0; }
+.shot { margin: 18px auto 22px; max-width: 260px; text-align: center; }
+.shot img { display: block; width: 100%; height: auto; border-radius: 28px; border: 1px solid var(--line); }
+.shot figcaption { margin-top: 8px; color: var(--muted); font-size: 15px; line-height: 1.45; }
