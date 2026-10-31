@@ -229,7 +229,9 @@ export default function KasamaScreen() {
           );
         }}
       />
-      <View style={[styles.bar, { backgroundColor: c.ground, paddingBottom: typing ? 10 : 104 }]}>
+      {/* Clears the floating bar and its raised mic, which sit higher on phones with on-screen buttons */}
+      <View style={[styles.bar, { backgroundColor: c.ground, paddingBottom: typing ? 10 : Math.max(insets.bottom, 12) + 92 }]}>
+        {!!voice.note && !voice.listening && <Text style={{ color: c.accent, fontFamily: FONT.strong, fontSize: 14, marginBottom: 6, marginLeft: 8 }}>{voice.note}</Text>}
         <View style={styles.box}>
           <TextInput
             ref={input}
@@ -250,7 +252,6 @@ export default function KasamaScreen() {
             </Pressable>
           )}
         </View>
-        {!!voice.note && !voice.listening && <Text style={{ color: c.accent, fontFamily: FONT.strong, fontSize: 13, marginTop: 6, marginLeft: 8 }}>{voice.note}</Text>}
       </View>
     </KeyboardAvoidingView>
   );
@@ -292,7 +293,7 @@ const styles = StyleSheet.create({
   mine: { alignSelf: 'flex-end', maxWidth: '80%', paddingVertical: 12, paddingHorizontal: 18, backgroundColor: '#ffffff', shadowColor: '#3b3430', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 1 },
   light: { width: 12, height: 12, borderRadius: 6, marginTop: 7, backgroundColor: '#f2b48a', shadowColor: '#f2b48a', shadowOpacity: 0.8, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } },
   undo: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginLeft: 24, marginTop: 2, paddingVertical: 8, paddingHorizontal: 14, minHeight: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.85)' },
-  bar: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 104 },
+  bar: { paddingHorizontal: 16, paddingTop: 8 },
   box: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, backgroundColor: '#ffffff', borderRadius: 28, paddingLeft: 20, paddingRight: 6, paddingVertical: 6 },
   round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });
