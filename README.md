@@ -4,6 +4,15 @@ A calm personal assistant and companion on your phone. Talk to Kasama (type or s
 
 Kasama lives in a calm place you choose: **Dagat** (by the sea), **Bundok** (the mountains) or **Palayan** (the rice fields). Its logo is two stones side by side: the big one is Kasama, the small one is you.
 
+**Website and how-to guide:** https://jypeejypee.github.io/kasama/ ([How to use Kasama](https://jypeejypee.github.io/kasama/guide.html))
+
+<p>
+  <img src="docs/images/talk.jpg" alt="A messy Taglish message sorted into four tasks" width="240">
+  <img src="docs/images/home.jpg" alt="Home screen showing today's tasks" width="240">
+  <img src="docs/images/calendar.jpg" alt="Calendar showing work, meetings and tasks together" width="240">
+</p>
+
+
 **Stack:** React Native · Expo SDK 57 · Expo Router (tabs) · TypeScript · expo-notifications (local) · expo-speech-recognition · react-native-svg · AsyncStorage · Supabase Edge Function → Claude API
 
 If you know React, you already know most of this. Instead of `<div>` and `<p>` you use `<View>` and `<Text>`, and styles are JavaScript objects.
